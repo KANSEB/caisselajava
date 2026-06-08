@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Caisse Bar — La Java</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  :root {
+    --bg: #0a0a0a;
+    --surface: #1a1a1a;
+    --surface2: #262626;
+    --surface3: #333;
+    --border: #404040;
+    --accent: #d4ff00;
+    --text: #ffffff;
+    --text-dim: #b0b0b0;
+    --muted: #777;
+    --danger: #ff3b30;
+    --success: #34c759;
+
+    /* Catégories — couleurs vives et distinctes */
+    --c-blonde:  #f5b800;
+    --c-blanche: #5ec5ff;
+    --c-ipa:     #ff6b35;
+    --c-rouge:   #d63447;
+    --c-blanc:   #e8e8d0;
+    --c-rose:    #ff8fa3;
+    --c-soft:    #4ecdc4;
+    --c-cons:    #a78bfa;
+  }
+  body { background: var(--bg); color: var(--text); height: 100dvh; display: flex; flex-direction: column; overflow: hidden; font-size: 16px; }
+
+  /* HEADER */
+  .header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--surface); border-bottom: 2px solid var(--border); flex-shrink: 0; }
+  .header-title { font-size: 20px; font-weight: 900; letter-spacing: 1.5px; }
+  .header-title span { color: var(--accent); }
+  .btn-config { background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim); padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+
+  /* TICKET */
+  .ticket { background: var(--surface); margin: 10px 12px 0; border-radius: 12px; border: 1px solid var(--border); flex-shrink: 0; }
+  .ticket-items { max-height: 120px; overflow-y: auto; padding: 8px; }
+  .ticket-item { display: flex; align-items: center; padding: 8px 10px; border-radius: 8px; margin-bottom: 4px; background: var(--surface2); font-size: 15px; }
+  .ticket-item-name { flex: 1; font-weight: 700; color: var(--text); }
+  .ticket-item-qty { background: var(--accent); color: #000; font-weight: 900; min-width: 28px; height: 28px; padding: 0 6px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; margin: 0 10px; flex-shrink: 0; }
+  .ticket-item-price { color: var(--accent); font-weight: 800; min-width: 64px; text-align: right; font-size: 15px; flex-shrink: 0; }
+  .ticket-item-del { background: none; border: none; color: var(--danger); cursor: pointer; padding: 4px 8px; font-size: 18px; flex-shrink: 0; font-weight: 700; }
+  .ticket-empty { padding: 16px; text-align: center; color: var(--muted); font-size: 14px; font-style: italic; }
+  .total-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-top: 2px solid var(--border); background: var(--surface2); border-radius: 0 0 12px 12px; }
+  .total-label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }
+  .total-amount { font-size: 36px; font-weight: 900; color: var(--accent); }
+
+  /* GRILLE */
+  .grid-wrap { flex: 1; overflow-y: auto; padding: 10px 12px 4px; display: flex; flex-direction: column; gap: 12px; }
+  .section { display: flex; flex-direction: column; gap: 6px; }
+  .section-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-dim); padding-left: 4px; }
+  .section-row { display: grid; gap: 8px; }
+  .cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .cols-2 { grid-template-columns: 1fr 1fr; }
+
+  /* BOUTONS PRODUITS — plus gros, plus contrastés */
+  .prod-btn {
+    background: var(--surface2);
+    border: 3px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 6px;
+    cursor: pointer;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 4px; min-height: 86px;
+    transition: transform 0.08s, background 0.08s;
+    position: relative;
+  }
+  .prod-btn:active { transform: scale(0.94); background: var(--surface3); }
+  .prod-name  { font-size: 17px; font-weight: 900; color: var(--text); text-align: center; line-height: 1.1; }
+  .prod-sub   { font-size: 12px; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .prod-price { font-size: 20px; font-weight: 900; color: var(--accent); }
+
+  /* Couleurs catégories — bordure colorée + nom coloré */
+  .c-blonde  { border-color: var(--c-blonde);  } .c-blonde  .prod-name { color: var(--c-blonde); }
+  .c-blanche { border-color: var(--c-blanche); } .c-blanche .prod-name { color: var(--c-blanche); }
+  .c-ipa     { border-color: var(--c-ipa);     } .c-ipa     .prod-name { color: var(--c-ipa); }
+  .c-rouge   { border-color: var(--c-rouge);   } .c-rouge   .prod-name { color: var(--c-rouge); }
+  .c-blanc   { border-color: var(--c-blanc);   } .c-blanc   .prod-name { color: var(--c-blanc); }
+  .c-rose    { border-color: var(--c-rose);    } .c-rose    .prod-name { color: var(--c-rose); }
+  .c-soft    { border-color: var(--c-soft);    } .c-soft    .prod-name { color: var(--c-soft); }
+  .c-cons    { border-color: var(--c-cons);    } .c-cons    .prod-name { color: var(--c-cons); } .c-cons .prod-price { color: var(--c-cons); }
+
+  /* Animation "+1" floating */
+  .float-plus {
+    position: absolute; top: 8px; right: 8px;
+    background: var(--accent); color: #000; font-weight: 900; font-size: 14px;
+    padding: 2px 8px; border-radius: 12px;
+    animation: floatup 0.6s ease-out forwards;
+    pointer-events: none;
+  }
+  @keyframes floatup {
+    0%   { opacity: 0; transform: translateY(0) scale(0.5); }
+    30%  { opacity: 1; transform: translateY(-8px) scale(1.1); }
+    100% { opacity: 0; transform: translateY(-28px) scale(1); }
+  }
+
+  /* ACTIONS */
+  .actions { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 8px; padding: 10px 12px; flex-shrink: 0; background: var(--surface); border-top: 1px solid var(--border); }
+  .btn-action { padding: 16px 8px; border-radius: 10px; font-size: 14px; font-weight: 800; cursor: pointer; border: none; transition: transform 0.1s; text-align: center; }
+  .btn-action:active { transform: scale(0.96); }
+  .btn-clear  { background: transparent; color: var(--danger); border: 2px solid var(--danger); }
+  .btn-remove { background: transparent; color: var(--text-dim); border: 2px solid var(--border); }
+  .btn-pay    { background: var(--accent); color: #000; font-size: 18px; font-weight: 900; }
+  .btn-pay:disabled { opacity: 0.35; }
+
+  /* MODALS */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100; display: flex; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal { background: var(--surface); border-radius: 18px 18px 0 0; border-top: 2px solid var(--accent); padding: 18px; width: 100%; max-height: 85vh; overflow-y: auto; transform: translateY(20px); transition: transform 0.2s; }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .modal-title { font-size: 18px; font-weight: 900; }
+  .btn-close { background: none; border: none; color: var(--text-dim); font-size: 26px; cursor: pointer; padding: 0 6px; }
+
+  /* PIN PAD */
+  .pin-display { display: flex; justify-content: center; gap: 10px; margin: 20px 0 18px; }
+  .pin-dot { width: 48px; height: 56px; border-radius: 10px; border: 2px solid var(--border); background: var(--surface2); transition: all 0.15s; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 900; color: var(--accent); }
+  .pin-dot.filled { border-color: var(--accent); }
+  .pin-dot.error { background: var(--danger); border-color: var(--danger); color: #fff; animation: shake 0.3s; }
+  @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+  .pin-pad { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; max-width: 320px; margin: 0 auto; }
+  .pin-key { background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-size: 26px; font-weight: 700; padding: 18px; border-radius: 12px; cursor: pointer; transition: transform 0.08s; }
+  .pin-key:active { transform: scale(0.94); background: var(--surface3); }
+  .pin-key.del { color: var(--danger); }
+  .pin-hint { text-align: center; color: var(--text-dim); font-size: 13px; margin-bottom: 8px; }
+
+  /* CONFIG */
+  .config-section { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+  .config-item { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface2); border-radius: 10px; margin-bottom: 6px; }
+  .config-name { flex: 1; font-size: 15px; font-weight: 700; }
+  .config-price-input { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--accent); font-size: 16px; font-weight: 800; padding: 8px 12px; width: 90px; text-align: right; }
+  .config-price-input:focus { outline: none; border-color: var(--accent); }
+
+  .session-stats { background: var(--surface2); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { font-size: 14px; color: var(--text-dim); font-weight: 600; }
+  .stat-value { font-size: 18px; font-weight: 900; color: var(--accent); }
+  .stat-value.total { font-size: 24px; }
+
+  .config-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .btn-secondary { padding: 14px; border-radius: 10px; font-size: 14px; font-weight: 800; cursor: pointer; background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary.danger { color: var(--danger); border-color: var(--danger); }
+
+  /* PAY */
+  .pay-total { font-size: 52px; font-weight: 900; color: var(--accent); text-align: center; margin: 16px 0; }
+  .pay-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0; }
+  .pay-method { padding: 24px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface2); font-size: 17px; font-weight: 800; cursor: pointer; text-align: center; transition: all 0.15s; color: var(--text); }
+  .pay-method.selected { border-color: var(--accent); color: var(--accent); background: rgba(212,255,0,0.08); }
+  .pay-method-icon { font-size: 32px; display: block; margin-bottom: 8px; }
+  .btn-confirm { width: 100%; padding: 18px; background: var(--success); border: none; border-radius: 12px; font-size: 19px; font-weight: 900; color: #000; cursor: pointer; display: none; }
+  .btn-confirm.show { display: block; }
+
+  .flash { position: fixed; inset: 0; background: var(--success); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.15s; }
+  .flash.show { opacity: 1; }
+  .flash-icon { font-size: 90px; }
+  .flash-text { font-size: 28px; font-weight: 900; color: #000; margin-top: 12px; letter-spacing: 1px; }
+
+  /* LOGIN */
+  .login-screen { position: fixed; inset: 0; background: var(--bg); z-index: 300; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 16px; }
+  .login-logo { font-size: 32px; font-weight: 900; letter-spacing: 2px; margin-bottom: 8px; }
+  .login-logo span { color: var(--accent); }
+  .login-sub { color: var(--text-dim); font-size: 14px; margin-bottom: 20px; text-align: center; }
+  .login-input { width: 100%; max-width: 320px; background: var(--surface); border: 2px solid var(--border); color: var(--text); padding: 16px; border-radius: 10px; font-size: 17px; font-weight: 700; text-align: center; }
+  .login-input:focus { outline: none; border-color: var(--accent); }
+  .login-btn { width: 100%; max-width: 320px; background: var(--accent); color: #000; border: none; padding: 18px; border-radius: 10px; font-size: 18px; font-weight: 900; cursor: pointer; }
+  .login-btn:disabled { opacity: 0.4; }
+  .login-error { color: var(--danger); font-weight: 700; min-height: 20px; font-size: 14px; }
+
+  /* HEADER badges */
+  .header-volunteer { display: flex; align-items: center; gap: 8px; }
+  .vol-badge { background: var(--surface2); color: var(--accent); padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 800; border: 1px solid var(--border); }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: background 0.2s; }
+  .sync-dot.ok { background: var(--success); }
+  .sync-dot.err { background: var(--danger); }
+  .sync-dot.pending { background: var(--accent); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--surface2); color: var(--text); padding: 12px 20px; border-radius: 24px; font-size: 14px; font-weight: 700; z-index: 250; opacity: 0; transition: all 0.25s; border: 1px solid var(--border); }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.ok  { border-color: var(--success); }
+  .toast.err { border-color: var(--danger); color: var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-volunteer">
+    <div class="header-title">BAR <span>LA JAVA</span></div>
+    <div class="sync-dot" id="syncDot" title="Statut synchronisation"></div>
+  </div>
+  <button class="btn-config" id="btnConfig">⚙ ADMIN</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="ticket">
+  <div class="ticket-items" id="ticketItems">
+    <div class="ticket-empty">Aucun article — Touche un produit pour commencer</div>
+  </div>
+  <div class="total-bar">
+    <div class="total-label">Total</div>
+    <div class="total-amount" id="totalAmount">0,00 €</div>
+  </div>
+</div>
+
+<div class="grid-wrap" id="gridWrap"></div>
+
+<div class="actions">
+  <button class="btn-action btn-clear"  id="btnClear">✕ Vider</button>
+  <button class="btn-action btn-remove" id="btnRemove">← Retirer</button>
+  <button class="btn-action btn-pay"    id="btnPay">ENCAISSER</button>
+</div>
+
+<!-- PIN -->
+<div class="modal-overlay" id="pinModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">🔒 Code Admin</div>
+      <button class="btn-close" id="closePin">✕</button>
+    </div>
+    <div class="pin-hint" id="pinHint">Entre le code à 4 chiffres</div>
+    <div class="pin-display" id="pinDisplay"></div>
+    <div id="pinError" style="text-align:center; color:var(--danger); font-weight:800; font-size:14px; min-height:20px; margin-bottom:10px;"></div>
+    <div class="pin-pad" id="pinPad"></div>
+  </div>
+</div>
+
+<!-- CONFIG -->
+<div class="modal-overlay" id="configModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">⚙ Administration</div>
+      <button class="btn-close" id="closeConfig">✕</button>
+    </div>
+
+    <div class="config-actions" style="margin-top:0; padding-top:0; border-top:none;">
+      <button class="btn-secondary" id="btnChangePin">🔑 Changer le code</button>
+      <button class="btn-secondary danger" id="btnResetSession">↻ Reset session locale</button>
+    </div>
+
+    <div class="config-section">📊 Session en cours</div>
+    <div class="session-stats" id="sessionStats"></div>
+
+    <div class="config-section">💶 Prix des produits</div>
+    <div id="configItems"></div>
+  </div>
+</div>
+
+<!-- PAY -->
+<div class="modal-overlay" id="payModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Encaissement</div>
+      <button class="btn-close" id="closePay">✕</button>
+    </div>
+    <div class="pay-total" id="payTotal"></div>
+    <div class="pay-methods">
+      <div class="pay-method" data-method="tickets"><span class="pay-method-icon">🎟️</span>Tickets</div>
+      <div class="pay-method" data-method="card"><span class="pay-method-icon">💳</span>Carte</div>
+    </div>
+    <button class="btn-confirm" id="btnConfirm">✓ VALIDER</button>
+  </div>
+</div>
+
+<div class="flash" id="flash">
+  <div class="flash-icon">✓</div>
+  <div class="flash-text">ENCAISSÉ</div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — à remplir avant déploiement
+   ============================================================ */
+const SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwr4h-uonIfw94r4rxtv1vNZzFQLg-yoXMd8LtrysiLBsv3nRuA2rjdWHvzqHs7Qe4iPg/exec';
+/* ============================================================ */
+
+const DEFAULTS = [
+  { id:'blonde_d',  name:'Blonde',  sub:'Demi',  price:3.50, cat:'biere', color:'c-blonde'  },
+  { id:'blanche_d', name:'Blanche', sub:'Demi',  price:4.50, cat:'biere', color:'c-blanche' },
+  { id:'ipa_d',     name:'IPA',     sub:'Demi',  price:5.50, cat:'biere', color:'c-ipa'     },
+  { id:'blonde_p',  name:'Blonde',  sub:'Pinte', price:6.00, cat:'biere', color:'c-blonde'  },
+  { id:'blanche_p', name:'Blanche', sub:'Pinte', price:7.00, cat:'biere', color:'c-blanche' },
+  { id:'ipa_p',     name:'IPA',     sub:'Pinte', price:8.00, cat:'biere', color:'c-ipa'     },
+  { id:'rouge_25',  name:'Rouge',   sub:'25cl',  price:5.00, cat:'vin',   color:'c-rouge'   },
+  { id:'blanc_25',  name:'Blanc',   sub:'25cl',  price:5.00, cat:'vin',   color:'c-blanc'   },
+  { id:'rose_25',   name:'Rosé',    sub:'25cl',  price:5.00, cat:'vin',   color:'c-rose'    },
+  { id:'rouge_50',  name:'Rouge',   sub:'50cl',  price:9.00, cat:'vin',   color:'c-rouge'   },
+  { id:'blanc_50',  name:'Blanc',   sub:'50cl',  price:9.00, cat:'vin',   color:'c-blanc'   },
+  { id:'rose_50',   name:'Rosé',    sub:'50cl',  price:9.00, cat:'vin',   color:'c-rose'    },
+  { id:'coca',      name:'Coca',    sub:'',      price:3.00, cat:'soft',  color:'c-soft'    },
+  { id:'jus',       name:'Jus O.',  sub:'',      price:3.00, cat:'soft',  color:'c-soft'    },
+  { id:'icetea',    name:'Ice Tea', sub:'',      price:3.00, cat:'soft',  color:'c-soft'    },
+  { id:'cons',      name:'Écocup',  sub:'Consigne', price:1.00, cat:'cons', color:'c-cons'  },
+];
+
+const DEFAULT_PIN = '1234';
+
+function loadProducts() { try { const s=localStorage.getItem('lj_products'); return s?JSON.parse(s):JSON.parse(JSON.stringify(DEFAULTS)); } catch { return JSON.parse(JSON.stringify(DEFAULTS)); } }
+function saveProducts() { localStorage.setItem('lj_products', JSON.stringify(products)); }
+
+function loadPin()  { return localStorage.getItem('lj_pin') || DEFAULT_PIN; }
+function savePin(p) { localStorage.setItem('lj_pin', p); }
+
+function loadSession() {
+  try {
+    const s=localStorage.getItem('lj_session');
+    if(!s) return {tickets:0,card:0,countTickets:0,countCard:0};
+    const parsed = JSON.parse(s);
+    // migration depuis l'ancien format
+    if(parsed.cash!==undefined && parsed.tickets===undefined) {
+      parsed.tickets = parsed.cash; delete parsed.cash;
+    }
+    if(parsed.countTickets===undefined) parsed.countTickets = 0;
+    if(parsed.countCard===undefined)    parsed.countCard = 0;
+    return parsed;
+  } catch { return {tickets:0,card:0,countTickets:0,countCard:0}; }
+}
+function saveSession() { localStorage.setItem('lj_session', JSON.stringify(session)); }
+
+let products = loadProducts();
+let session  = loadSession();
+let cart = [];
+
+function vibrate(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch {} }
+
+function renderGrid() {
+  const demis   = products.filter(p=>p.cat==='biere'&&p.sub==='Demi');
+  const pintes  = products.filter(p=>p.cat==='biere'&&p.sub==='Pinte');
+  const vins25  = products.filter(p=>p.cat==='vin'  &&p.sub==='25cl');
+  const vins50  = products.filter(p=>p.cat==='vin'  &&p.sub==='50cl');
+  const softs   = products.filter(p=>p.cat==='soft');
+  const cons    = products.filter(p=>p.cat==='cons');
+
+  document.getElementById('gridWrap').innerHTML = `
+    <div class="section">
+      <div class="section-title">🍺 Bières — Demi</div>
+      <div class="section-row cols-3">${demis.map(btn).join('')}</div>
+    </div>
+    <div class="section">
+      <div class="section-title">🍺 Bières — Pinte</div>
+      <div class="section-row cols-3">${pintes.map(btn).join('')}</div>
+    </div>
+    <div class="section">
+      <div class="section-title">🍷 Vins — 25cl</div>
+      <div class="section-row cols-3">${vins25.map(btn).join('')}</div>
+    </div>
+    <div class="section">
+      <div class="section-title">🍷 Vins — 50cl</div>
+      <div class="section-row cols-3">${vins50.map(btn).join('')}</div>
+    </div>
+    <div class="section">
+      <div class="section-title">🥤 Softs</div>
+      <div class="section-row cols-3">${softs.map(btn).join('')}</div>
+    </div>
+    <div class="section">
+      <div class="section-title">🪙 Consigne</div>
+      <div class="section-row cols-2">${cons.map(btn).join('')}</div>
+    </div>
+  `;
+  document.querySelectorAll('.prod-btn').forEach(b=>b.addEventListener('click',()=>addItem(b.dataset.id, b)));
+}
+
+function btn(p) {
+  return `<button class="prod-btn ${p.color}" data-id="${p.id}">
+    <span class="prod-name">${p.name}</span>
+    ${p.sub?`<span class="prod-sub">${p.sub}</span>`:''}
+    <span class="prod-price">${fmt(p.price)}</span>
+  </button>`;
+}
+
+function addItem(id, btnEl) {
+  const p=products.find(x=>x.id===id); if(!p) return;
+  const ex=cart.find(x=>x.id===id);
+  if(ex) ex.qty++; else cart.push({...p,qty:1});
+  vibrate(15);
+  if(btnEl) {
+    const f=document.createElement('div'); f.className='float-plus'; f.textContent='+1';
+    btnEl.appendChild(f); setTimeout(()=>f.remove(),600);
+  }
+  renderCart();
+}
+function removeLast() {
+  if(!cart.length) return;
+  vibrate(20);
+  const last=cart[cart.length-1]; last.qty--;
+  if(last.qty<=0) cart.pop(); renderCart();
+}
+function removeItem(id) { vibrate(20); cart=cart.filter(x=>x.id!==id); renderCart(); }
+function clearCart()    { if(!cart.length) return; vibrate([20,40,20]); cart=[]; renderCart(); }
+function total()        { return cart.reduce((s,i)=>s+i.price*i.qty,0); }
+
+function renderCart() {
+  const el=document.getElementById('ticketItems');
+  if(!cart.length) { el.innerHTML='<div class="ticket-empty">Aucun article — Touche un produit pour commencer</div>'; }
+  else {
+    el.innerHTML=cart.map(i=>`
+      <div class="ticket-item">
+        <span class="ticket-item-name">${i.name}${i.sub?' – '+i.sub:''}</span>
+        <span class="ticket-item-qty">${i.qty}</span>
+        <span class="ticket-item-price">${fmt(i.price*i.qty)}</span>
+        <button class="ticket-item-del" data-id="${i.id}">✕</button>
+      </div>`).join('');
+    el.querySelectorAll('.ticket-item-del').forEach(b=>b.addEventListener('click',()=>removeItem(b.dataset.id)));
+    el.scrollTop=el.scrollHeight;
+  }
+  document.getElementById('totalAmount').textContent=fmt(total());
+  document.getElementById('btnPay').disabled = cart.length===0;
+}
+
+function renderConfig() {
+  const cats=[{key:'biere',label:'Bières'},{key:'vin',label:'Vins'},{key:'soft',label:'Softs'},{key:'cons',label:'Consigne'}];
+  document.getElementById('configItems').innerHTML=cats.map(c=>{
+    const items=products.filter(p=>p.cat===c.key);
+    return `<div class="config-section">${c.label}</div>`+items.map(p=>{
+      const idx=products.indexOf(p);
+      return `<div class="config-item">
+        <span class="config-name">${p.name}${p.sub?' – '+p.sub:''}</span>
+        <input class="config-price-input" type="number" step="0.5" min="0" value="${p.price.toFixed(2)}" data-idx="${idx}">
+      </div>`;
+    }).join('');
+  }).join('');
+  document.querySelectorAll('.config-price-input').forEach(inp=>{
+    inp.addEventListener('change',()=>{
+      const v=parseFloat(inp.value); if(!isNaN(v)&&v>=0){products[+inp.dataset.idx].price=v; saveProducts(); renderGrid();}
+    });
+  });
+  renderSessionStats();
+}
+
+function renderSessionStats() {
+  const tot = session.tickets + session.card;
+  const totCount = session.countTickets + session.countCard;
+  const pct = (v)=> tot>0 ? Math.round(v/tot*100) : 0;
+  document.getElementById('sessionStats').innerHTML = `
+    <div class="stat-row">
+      <span class="stat-label">🎟️ Tickets <small style="color:var(--muted);font-weight:600;">(${session.countTickets} encaiss.)</small></span>
+      <span class="stat-value">${fmt(session.tickets)} <small style="color:var(--text-dim);font-size:13px;">${pct(session.tickets)}%</small></span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">💳 Carte <small style="color:var(--muted);font-weight:600;">(${session.countCard} encaiss.)</small></span>
+      <span class="stat-value">${fmt(session.card)} <small style="color:var(--text-dim);font-size:13px;">${pct(session.card)}%</small></span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">📋 Total encaissements</span>
+      <span class="stat-value">${totCount}</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">TOTAL CAISSE</span>
+      <span class="stat-value total">${fmt(tot)}</span>
+    </div>
+  `;
+}
+
+function fmt(n) { return n.toFixed(2).replace('.',',')+' €'; }
+
+/* ===== PIN ===== */
+let pinBuffer = '';
+let pinMode = 'auth'; // 'auth' | 'set-new'
+let pinOnSuccess = null;
+
+function renderPinDisplay(error=false) {
+  const el = document.getElementById('pinDisplay');
+  el.innerHTML = [0,1,2,3].map(i=>`<div class="pin-dot ${i<pinBuffer.length?'filled':''} ${error?'error':''}">${pinBuffer[i]||''}</div>`).join('');
+}
+
+function buildPinPad() {
+  const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
+  document.getElementById('pinPad').innerHTML = keys.map(k=>{
+    if(k==='') return '<div></div>';
+    if(k==='⌫') return `<button class="pin-key del" data-k="del">⌫</button>`;
+    return `<button class="pin-key" data-k="${k}">${k}</button>`;
+  }).join('');
+  document.querySelectorAll('.pin-key').forEach(b=>b.addEventListener('click',()=>onPinKey(b.dataset.k)));
+}
+
+function onPinKey(k) {
+  vibrate(10);
+  showPinError('');
+  if(k==='del') { pinBuffer = pinBuffer.slice(0,-1); renderPinDisplay(); return; }
+  if(pinBuffer.length>=4) return;
+  pinBuffer += k;
+  renderPinDisplay();
+  if(pinBuffer.length===4) setTimeout(validatePin, 150);
+}
+
+function showPinError(msg) {
+  document.getElementById('pinError').textContent = msg;
+}
+function validatePin() {
+  if(pinBuffer.length<4) { showPinError('Tape les 4 chiffres'); vibrate(40); return; }
+  if(pinMode==='auth') {
+    if(pinBuffer===loadPin()) {
+      showPinError(''); closePin(); pinOnSuccess && pinOnSuccess();
+    } else {
+      renderPinDisplay(true); vibrate([60,40,60]);
+      showPinError('❌ Code incorrect');
+      setTimeout(()=>{ pinBuffer=''; renderPinDisplay(); }, 600);
+    }
+  } else if(pinMode==='set-new') {
+    savePin(pinBuffer); showPinError(''); closePin();
+    alert('Code mis à jour ✓');
+  }
+}
+
+function openPin(mode, onSuccess) {
+  pinMode = mode; pinBuffer=''; pinOnSuccess = onSuccess || null;
+  showPinError('');
+  document.querySelector('#pinModal .modal-title').textContent =
+    mode==='auth' ? '🔒 Code Admin' : '🔑 Nouveau code';
+  document.querySelector('#pinModal .pin-hint').textContent =
+    mode==='auth' ? 'Entre le code à 4 chiffres' : 'Choisis un nouveau code à 4 chiffres';
+  renderPinDisplay();
+  document.getElementById('pinModal').classList.add('open');
+}
+function closePin() { document.getElementById('pinModal').classList.remove('open'); }
+
+/* ===== SYNC Google Sheets ===== */
+function setSyncStatus(s) {
+  const d = document.getElementById('syncDot');
+  d.classList.remove('ok','err','pending');
+  if(s) d.classList.add(s);
+}
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type||'');
+  setTimeout(()=>{ t.classList.remove('show'); }, 2200);
+}
+function loadQueue() {
+  try { return JSON.parse(localStorage.getItem('lj_sync_queue') || '[]'); } catch { return []; }
+}
+function saveQueue(q) { localStorage.setItem('lj_sync_queue', JSON.stringify(q)); }
+
+async function syncSale(sale) {
+  if(!SHEETS_WEBHOOK_URL) { return false; }
+  try {
+    await fetch(SHEETS_WEBHOOK_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(sale)
+    });
+    return true;
+  } catch(e) { return false; }
+}
+
+async function recordSale(method, amount, items) {
+  const sale = {
+    ts: new Date().toISOString(),
+    method, amount,
+    items: items.map(i=>({ name:i.name, sub:i.sub, qty:i.qty, price:i.price })),
+    deviceId: getDeviceId()
+  };
+  setSyncStatus('pending');
+  const ok = await syncSale(sale);
+  if(ok) { setSyncStatus('ok'); }
+  else {
+    setSyncStatus('err');
+    const q = loadQueue(); q.push(sale); saveQueue(q);
+    showToast('⚠ Hors-ligne — sauvegardé, retentera plus tard', 'err');
+  }
+}
+
+function getDeviceId() {
+  let id = localStorage.getItem('lj_device');
+  if(!id) { id = 'dev_' + Math.random().toString(36).slice(2,9); localStorage.setItem('lj_device', id); }
+  return id;
+}
+
+async function retryQueue() {
+  const q = loadQueue();
+  if(!q.length || !SHEETS_WEBHOOK_URL) return;
+  setSyncStatus('pending');
+  const remaining = [];
+  for(const s of q) {
+    const ok = await syncSale(s);
+    if(!ok) remaining.push(s);
+  }
+  saveQueue(remaining);
+  setSyncStatus(remaining.length ? 'err' : 'ok');
+  if(q.length && !remaining.length) showToast('✓ ' + q.length + ' encaiss. resynchronisé(s)', 'ok');
+}
+
+/* ===== Init ===== */
+buildPinPad();
+renderGrid(); renderCart();
+
+// initial sync status
+setSyncStatus(SHEETS_WEBHOOK_URL ? 'ok' : 'err');
+if(!SHEETS_WEBHOOK_URL) document.getElementById('syncDot').title = 'Webhook non configuré — données locales uniquement';
+window.addEventListener('online', retryQueue);
+setInterval(retryQueue, 30000);
+retryQueue();
+
+document.getElementById('btnClear').addEventListener('click',clearCart);
+document.getElementById('btnRemove').addEventListener('click',removeLast);
+
+document.getElementById('btnConfig').addEventListener('click',()=>{
+  openPin('auth', ()=>{
+    renderConfig();
+    document.getElementById('configModal').classList.add('open');
+  });
+});
+document.getElementById('closePin').addEventListener('click',closePin);
+document.getElementById('closeConfig').addEventListener('click',()=>document.getElementById('configModal').classList.remove('open'));
+document.getElementById('closePay').addEventListener('click',()=>document.getElementById('payModal').classList.remove('open'));
+
+document.getElementById('btnChangePin').addEventListener('click',()=>{
+  document.getElementById('configModal').classList.remove('open');
+  openPin('set-new');
+});
+document.getElementById('btnResetSession').addEventListener('click',()=>{
+  if(confirm('Remettre les compteurs de session à zéro ?\n\n(Garde les prix configurés)')) {
+    session = {tickets:0,card:0,countTickets:0,countCard:0}; saveSession(); renderSessionStats();
+  }
+});
+
+document.getElementById('btnPay').addEventListener('click',()=>{
+  if(total()===0) return;
+  document.getElementById('payTotal').textContent=fmt(total());
+  document.getElementById('btnConfirm').classList.remove('show');
+  document.querySelectorAll('.pay-method').forEach(m=>m.classList.remove('selected'));
+  document.getElementById('payModal').classList.add('open');
+});
+document.querySelectorAll('.pay-method').forEach(m=>m.addEventListener('click',()=>{
+  vibrate(15);
+  document.querySelectorAll('.pay-method').forEach(x=>x.classList.remove('selected'));
+  m.classList.add('selected');
+  document.getElementById('btnConfirm').classList.add('show');
+}));
+document.getElementById('btnConfirm').addEventListener('click',()=>{
+  const selected = document.querySelector('.pay-method.selected');
+  if(!selected) return;
+  const method = selected.dataset.method;
+  const amount = total();
+  const itemsSnapshot = JSON.parse(JSON.stringify(cart));
+  session[method] += amount;
+  if(method==='tickets') session.countTickets++; else session.countCard++;
+  saveSession();
+  recordSale(method, amount, itemsSnapshot);
+  document.getElementById('payModal').classList.remove('open');
+  const f=document.getElementById('flash'); f.classList.add('show'); vibrate([30,60,30]);
+  setTimeout(()=>{ f.classList.remove('show'); clearCart(); },900);
+});
+</script>
+</body>
+</html>
