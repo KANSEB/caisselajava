@@ -241,13 +241,11 @@
       <button class="btn-close" id="closeConfig">✕</button>
     </div>
 
-    <div class="config-actions" style="margin-top:0; padding-top:0; border-top:none;">
-      <button class="btn-secondary" id="btnChangePin">🔑 Changer le code</button>
-      <button class="btn-secondary danger" id="btnResetSession">↻ Reset session locale</button>
+    <div class="config-section">📊 Stats globales (toutes caisses)</div>
+    <div class="session-stats" id="sessionStats"><div style="text-align:center;color:var(--muted);font-size:13px;padding:8px;">Chargement…</div></div>
+    <div style="text-align:center; margin: 8px 0 4px;">
+      <button class="btn-secondary" id="btnRefreshStats" style="font-size:12px; padding:8px 14px;">↻ Rafraîchir</button>
     </div>
-
-    <div class="config-section">📊 Session en cours</div>
-    <div class="session-stats" id="sessionStats"></div>
 
     <div class="config-section">💶 Prix des produits</div>
     <div id="configItems"></div>
@@ -280,6 +278,7 @@
    CONFIG — à remplir avant déploiement
    ============================================================ */
 const SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwr4h-uonIfw94r4rxtv1vNZzFQLg-yoXMd8LtrysiLBsv3nRuA2rjdWHvzqHs7Qe4iPg/exec';
+const ADMIN_PIN = '1234';  // PIN fixe partagé sur tous les appareils — pour le changer, modifier ici puis git push
 /* ============================================================ */
 
 const DEFAULTS = [
@@ -301,32 +300,12 @@ const DEFAULTS = [
   { id:'cons',      name:'Écocup',  sub:'Consigne', price:1.00, cat:'cons', color:'c-cons'  },
 ];
 
-const DEFAULT_PIN = '1234';
 
 function loadProducts() { try { const s=localStorage.getItem('lj_products'); return s?JSON.parse(s):JSON.parse(JSON.stringify(DEFAULTS)); } catch { return JSON.parse(JSON.stringify(DEFAULTS)); } }
 function saveProducts() { localStorage.setItem('lj_products', JSON.stringify(products)); }
 
-function loadPin()  { return localStorage.getItem('lj_pin') || DEFAULT_PIN; }
-function savePin(p) { localStorage.setItem('lj_pin', p); }
-
-function loadSession() {
-  try {
-    const s=localStorage.getItem('lj_session');
-    if(!s) return {tickets:0,card:0,countTickets:0,countCard:0};
-    const parsed = JSON.parse(s);
-    // migration depuis l'ancien format
-    if(parsed.cash!==undefined && parsed.tickets===undefined) {
-      parsed.tickets = parsed.cash; delete parsed.cash;
-    }
-    if(parsed.countTickets===undefined) parsed.countTickets = 0;
-    if(parsed.countCard===undefined)    parsed.countCard = 0;
-    return parsed;
-  } catch { return {tickets:0,card:0,countTickets:0,countCard:0}; }
-}
-function saveSession() { localStorage.setItem('lj_session', JSON.stringify(session)); }
 
 let products = loadProducts();
-let session  = loadSession();
 let cart = [];
 
 function vibrate(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch {} }
@@ -432,38 +411,45 @@ function renderConfig() {
       const v=parseFloat(inp.value); if(!isNaN(v)&&v>=0){products[+inp.dataset.idx].price=v; saveProducts(); renderGrid();}
     });
   });
-  renderSessionStats();
 }
 
-function renderSessionStats() {
-  const tot = session.tickets + session.card;
-  const totCount = session.countTickets + session.countCard;
-  const pct = (v)=> tot>0 ? Math.round(v/tot*100) : 0;
-  document.getElementById('sessionStats').innerHTML = `
-    <div class="stat-row">
-      <span class="stat-label">🎟️ Tickets <small style="color:var(--muted);font-weight:600;">(${session.countTickets} encaiss.)</small></span>
-      <span class="stat-value">${fmt(session.tickets)} <small style="color:var(--text-dim);font-size:13px;">${pct(session.tickets)}%</small></span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-label">💳 Carte <small style="color:var(--muted);font-weight:600;">(${session.countCard} encaiss.)</small></span>
-      <span class="stat-value">${fmt(session.card)} <small style="color:var(--text-dim);font-size:13px;">${pct(session.card)}%</small></span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-label">📋 Total encaissements</span>
-      <span class="stat-value">${totCount}</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-label">TOTAL CAISSE</span>
-      <span class="stat-value total">${fmt(tot)}</span>
-    </div>
-  `;
+async function fetchGlobalStats() {
+  const el = document.getElementById('sessionStats');
+  el.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px;">Chargement…</div>';
+  try {
+    const r = await fetch(SHEETS_WEBHOOK_URL + '?action=stats', { cache: 'no-store' });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const tot = (d.tickets||0) + (d.card||0);
+    const totCount = (d.countTickets||0) + (d.countCard||0);
+    const pct = (v)=> tot>0 ? Math.round(v/tot*100) : 0;
+    el.innerHTML = `
+      <div class="stat-row">
+        <span class="stat-label">🎟️ Tickets <small style="color:var(--muted);font-weight:600;">(${d.countTickets||0} encaiss.)</small></span>
+        <span class="stat-value">${fmt(d.tickets||0)} <small style="color:var(--text-dim);font-size:13px;">${pct(d.tickets||0)}%</small></span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">💳 Carte <small style="color:var(--muted);font-weight:600;">(${d.countCard||0} encaiss.)</small></span>
+        <span class="stat-value">${fmt(d.card||0)} <small style="color:var(--text-dim);font-size:13px;">${pct(d.card||0)}%</small></span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">📋 Total encaissements</span>
+        <span class="stat-value">${totCount}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">TOTAL CAISSE</span>
+        <span class="stat-value total">${fmt(tot)}</span>
+      </div>
+    `;
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--danger);text-align:center;padding:10px;font-size:13px;">⚠ Erreur de chargement<br><small style="color:var(--muted);">'+e.message+'</small></div>';
+  }
 }
 
 function fmt(n) { return n.toFixed(2).replace('.',',')+' €'; }
 
 /* ===== PIN ===== */
 let pinBuffer = '';
-let pinMode = 'auth'; // 'auth' | 'set-new'
 let pinOnSuccess = null;
 
 function renderPinDisplay(error=false) {
@@ -496,27 +482,18 @@ function showPinError(msg) {
 }
 function validatePin() {
   if(pinBuffer.length<4) { showPinError('Tape les 4 chiffres'); vibrate(40); return; }
-  if(pinMode==='auth') {
-    if(pinBuffer===loadPin()) {
-      showPinError(''); closePin(); pinOnSuccess && pinOnSuccess();
-    } else {
-      renderPinDisplay(true); vibrate([60,40,60]);
-      showPinError('❌ Code incorrect');
-      setTimeout(()=>{ pinBuffer=''; renderPinDisplay(); }, 600);
-    }
-  } else if(pinMode==='set-new') {
-    savePin(pinBuffer); showPinError(''); closePin();
-    alert('Code mis à jour ✓');
+  if(pinBuffer===ADMIN_PIN) {
+    showPinError(''); closePin(); pinOnSuccess && pinOnSuccess();
+  } else {
+    renderPinDisplay(true); vibrate([60,40,60]);
+    showPinError('❌ Code incorrect');
+    setTimeout(()=>{ pinBuffer=''; renderPinDisplay(); }, 600);
   }
 }
 
-function openPin(mode, onSuccess) {
-  pinMode = mode; pinBuffer=''; pinOnSuccess = onSuccess || null;
+function openPin(onSuccess) {
+  pinBuffer=''; pinOnSuccess = onSuccess || null;
   showPinError('');
-  document.querySelector('#pinModal .modal-title').textContent =
-    mode==='auth' ? '🔒 Code Admin' : '🔑 Nouveau code';
-  document.querySelector('#pinModal .pin-hint').textContent =
-    mode==='auth' ? 'Entre le code à 4 chiffres' : 'Choisis un nouveau code à 4 chiffres';
   renderPinDisplay();
   document.getElementById('pinModal').classList.add('open');
 }
@@ -604,24 +581,17 @@ document.getElementById('btnClear').addEventListener('click',clearCart);
 document.getElementById('btnRemove').addEventListener('click',removeLast);
 
 document.getElementById('btnConfig').addEventListener('click',()=>{
-  openPin('auth', ()=>{
+  openPin(()=>{
     renderConfig();
     document.getElementById('configModal').classList.add('open');
+    fetchGlobalStats();
   });
 });
 document.getElementById('closePin').addEventListener('click',closePin);
 document.getElementById('closeConfig').addEventListener('click',()=>document.getElementById('configModal').classList.remove('open'));
 document.getElementById('closePay').addEventListener('click',()=>document.getElementById('payModal').classList.remove('open'));
 
-document.getElementById('btnChangePin').addEventListener('click',()=>{
-  document.getElementById('configModal').classList.remove('open');
-  openPin('set-new');
-});
-document.getElementById('btnResetSession').addEventListener('click',()=>{
-  if(confirm('Remettre les compteurs de session à zéro ?\n\n(Garde les prix configurés)')) {
-    session = {tickets:0,card:0,countTickets:0,countCard:0}; saveSession(); renderSessionStats();
-  }
-});
+document.getElementById('btnRefreshStats').addEventListener('click',fetchGlobalStats);
 
 document.getElementById('btnPay').addEventListener('click',()=>{
   if(total()===0) return;
@@ -642,9 +612,6 @@ document.getElementById('btnConfirm').addEventListener('click',()=>{
   const method = selected.dataset.method;
   const amount = total();
   const itemsSnapshot = JSON.parse(JSON.stringify(cart));
-  session[method] += amount;
-  if(method==='tickets') session.countTickets++; else session.countCard++;
-  saveSession();
   recordSale(method, amount, itemsSnapshot);
   document.getElementById('payModal').classList.remove('open');
   const f=document.getElementById('flash'); f.classList.add('show'); vibrate([30,60,30]);
