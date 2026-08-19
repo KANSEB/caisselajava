@@ -177,7 +177,16 @@
   /* PAY */
   .pay-total { font-size: 48px; font-weight: 900; color: var(--accent); text-align: center; margin: 10px 0 4px; }
   .pay-sub { text-align: center; color: var(--text-dim); font-size: 13px; font-weight: 700; margin-bottom: 12px; min-height: 18px; line-height: 1.5; }
+  /* Cases a cocher (tarif pref / offert) */
+  .pay-opts { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 12px; }
+  .pay-opt { display: flex; align-items: center; gap: 12px; background: var(--surface2); border: 2px solid var(--border); border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 800; cursor: pointer; transition: all 0.15s; }
+  .pay-opt input { width: 22px; height: 22px; accent-color: var(--accent); flex-shrink: 0; }
+  .pay-opt small { color: var(--muted); font-weight: 700; font-size: 11px; }
+  .pay-opt.on { border-color: var(--accent); color: var(--accent); background: rgba(255,77,157,0.10); }
+  .pay-opt.on small { color: var(--accent); opacity: 0.7; }
+
   .pay-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+  .pay-methods.disabled { opacity: 0.35; pointer-events: none; }
   .pay-method { padding: 18px 10px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface2); font-size: 15px; font-weight: 800; cursor: pointer; text-align: center; transition: all 0.15s; color: var(--text); }
   .pay-method.selected { border-color: var(--accent); color: var(--accent); background: rgba(255,77,157,0.10); }
   .pay-method-icon { font-size: 28px; display: block; margin-bottom: 6px; }
@@ -321,12 +330,14 @@
     </div>
     <div class="pay-total" id="payTotal"></div>
     <div class="pay-sub" id="paySub"></div>
+    <div class="pay-opts">
+      <label class="pay-opt" id="optPref"><input type="checkbox" id="ckPref"><span>🏷️ Tarif préf — bénévoles <small>(vérif nécessaire)</small></span></label>
+      <label class="pay-opt" id="optGift"><input type="checkbox" id="ckGift"><span>🎁 Offert — rien encaissé</span></label>
+    </div>
     <button class="btn-secondary" id="btnPrefAdjust" style="display:none;width:100%;margin-bottom:10px;">✎ Ajuster le montant</button>
-    <div class="pay-methods">
-      <div class="pay-method" data-method="cash"><span class="pay-method-icon">💵</span>Espèces<span class="pm-hint">Prix plein</span></div>
-      <div class="pay-method" data-method="card"><span class="pay-method-icon">💳</span>Carte<span class="pm-hint">Prix plein</span></div>
-      <div class="pay-method" data-method="pref"><span class="pay-method-icon">🏷️</span>Prix préf.<span class="pm-hint">Tarif du doc</span></div>
-      <div class="pay-method" data-method="gift"><span class="pay-method-icon">🎁</span>Offert<span class="pm-hint">0 € — don</span></div>
+    <div class="pay-methods" id="payMethods">
+      <div class="pay-method" data-method="cash"><span class="pay-method-icon">💵</span>Espèces</div>
+      <div class="pay-method" data-method="card"><span class="pay-method-icon">💳</span>Carte</div>
     </div>
     <button class="btn-confirm" id="btnConfirm">✓ VALIDER</button>
   </div>
@@ -462,17 +473,19 @@ function renderGrid() {
   });
 }
 
-/* Couleur reelle du vetement, devinee depuis son nom (pour la pastille) */
+/* Couleur reelle du vetement, devinee depuis son nom.
+   Utilisee pour le CONTOUR du bouton — teintes eclaircies pour rester
+   visibles sur fond sombre (noir → gris, bleu nuit → bleu profond). */
 function garmentSwatch(name) {
   const n = name.toLowerCase();
-  if(n.indexOf('bleu nuit') >= 0) return '#1e2a52';
+  if(n.indexOf('bleu nuit') >= 0) return '#3d55a8';
   if(n.indexOf('bleu')      >= 0) return '#2f6fd8';
-  if(n.indexOf('noir')      >= 0) return '#141414';
+  if(n.indexOf('noir')      >= 0) return '#8a8a8a';
   if(n.indexOf('crème') >= 0 || n.indexOf('creme') >= 0) return '#f2e8cf';
-  if(n.indexOf('blanc')     >= 0) return '#f5f5f5';
-  if(n.indexOf('olive')     >= 0) return '#708238';
-  if(n.indexOf('marron')    >= 0) return '#7b4a2d';
-  if(n.indexOf('vert')      >= 0) return '#2f8f4e';
+  if(n.indexOf('blanc')     >= 0) return '#ffffff';
+  if(n.indexOf('olive')     >= 0) return '#8b9c4a';
+  if(n.indexOf('marron')    >= 0) return '#9c6240';
+  if(n.indexOf('vert')      >= 0) return '#39a55f';
   if(n.indexOf('tote')      >= 0) return '#e9dcc0';
   return null;
 }
@@ -483,8 +496,8 @@ function prodBtn(g) {
   const rest     = g.rows.reduce((s,r)=>s+Math.max(0,remaining(r)),0);
   const cls      = rest<=0 ? 'out' : (rest<=3 ? 'low' : '');
   const sw       = garmentSwatch(g.name);
-  return '<button class="prod-btn ' + g.color + ' ' + (rest<=0?'out':'') + '" data-pid="' + g.id + '">'
-    + (sw ? '<span class="prod-swatch" style="background:' + sw + '"></span>' : '')
+  return '<button class="prod-btn ' + g.color + ' ' + (rest<=0?'out':'') + '" data-pid="' + g.id + '"'
+    + (sw ? ' style="border-color:' + sw + '"' : '') + '>'
     + '<span class="prod-name">' + g.name + '</span>'
     + '<span class="prod-price">' + priceTxt + '</span>'
     + '<span class="prod-stock ' + cls + '">' + (rest>0 ? 'reste ' + rest : 'épuisé') + '</span>'
@@ -616,24 +629,26 @@ function buildAmountPad() {
   }));
 }
 
-/* ===== Encaissement ===== */
-let payMethod = null;
+/* ===== Encaissement =====
+   Espèces / Carte = règlement. Cases à cocher optionnelles :
+   - Tarif préf (bénévoles) : bascule le montant sur le PU Préf du doc
+   - Offert : 0 €, sorti du stock, pas de règlement à choisir           */
+let payState = null;
 
 function openPay() {
   if(!cart.length) return;
-  payMethod = null;
-  setPayAmountDisplay(total(), null);
-  document.getElementById('paySub').textContent = '';
-  document.getElementById('btnPrefAdjust').style.display = 'none';
-  document.getElementById('btnConfirm').classList.remove('show');
-  document.querySelectorAll('.pay-method').forEach(m=>m.classList.remove('selected'));
+  payState = { pref:false, gift:false, settle:null, prefAmount:null };
+  document.getElementById('ckPref').checked = false;
+  document.getElementById('ckGift').checked = false;
+  refreshPay();
   document.getElementById('payModal').classList.add('open');
 }
 
-function markSelected(m) {
-  document.querySelectorAll('.pay-method').forEach(x=>x.classList.remove('selected'));
-  const el = document.querySelector('.pay-method[data-method="' + m + '"]');
-  if(el) el.classList.add('selected');
+function payAmount() {
+  if(!payState) return 0;
+  if(payState.gift) return 0;
+  if(payState.pref) return payState.prefAmount!=null ? payState.prefAmount : prefTotal();
+  return total();
 }
 
 /* Affiche le montant a encaisser ; si different du prix plein, le plein apparait barre */
@@ -646,56 +661,54 @@ function setPayAmountDisplay(amount, fullIfDifferent) {
   }
 }
 
-function selectMethod(m) {
-  vibrate(15);
+function refreshPay() {
+  const t = total(), amt = payAmount();
+  setPayAmountDisplay(amt, amt!==t ? t : null);
+  document.getElementById('optPref').classList.toggle('on', payState.pref);
+  document.getElementById('optGift').classList.toggle('on', payState.gift);
+  document.getElementById('btnPrefAdjust').style.display = payState.pref ? 'block' : 'none';
+  document.getElementById('payMethods').classList.toggle('disabled', payState.gift);
+  document.querySelectorAll('.pay-method').forEach(x=>x.classList.toggle('selected', !payState.gift && payState.settle===x.dataset.method));
+
   const sub = document.getElementById('paySub');
-  const adjust = document.getElementById('btnPrefAdjust');
+  if(payState.gift)      sub.textContent = 'Offert / don en nature — rien encaissé, sorti du stock';
+  else if(payState.pref) sub.innerHTML   = 'Tarif préf appliqué — remise <b style="color:var(--accent)">' + fmt(Math.max(0,t-amt)) + '</b>'
+                                         + (payState.settle ? '' : '<br><small>Choisis Espèces ou Carte</small>');
+  else                   sub.textContent = payState.settle ? (payState.settle==='cash' ? 'Règlement en espèces' : 'Règlement par carte') : '';
 
-  if(m==='pref') {
-    /* Le montant bascule immediatement sur le tarif pref officiel du doc */
-    markSelected('pref');
-    payMethod = { kind:'pref', amount:prefTotal(), settle:null };
-    setPayAmountDisplay(payMethod.amount, total());
-    sub.innerHTML = 'Tarif préférentiel appliqué — remise <b style="color:var(--accent)">' + fmt(Math.max(0,total()-payMethod.amount)) + '</b>'
-      + '<br><small>Choisis Espèces ou Carte pour le règlement</small>';
-    adjust.style.display = 'block';
-    document.getElementById('btnConfirm').classList.remove('show');
-    return;
-  }
+  document.getElementById('btnConfirm').classList.toggle('show', payState.gift || !!payState.settle);
+}
 
-  if(m==='gift') {
-    markSelected('gift');
-    payMethod = { kind:'gift', amount:0, settle:'' };
-    setPayAmountDisplay(0, total());
-    sub.innerHTML = 'Offert / don en nature — rien encaissé, sorti du stock';
-    adjust.style.display = 'none';
-    document.getElementById('btnConfirm').classList.add('show');
-    return;
+function onPrefToggle() {
+  payState.pref = document.getElementById('ckPref').checked;
+  payState.prefAmount = null;
+  if(payState.pref && payState.gift) { payState.gift = false; document.getElementById('ckGift').checked = false; }
+  vibrate(15); refreshPay();
+}
+function onGiftToggle() {
+  payState.gift = document.getElementById('ckGift').checked;
+  if(payState.gift) {
+    payState.settle = null;
+    if(payState.pref) { payState.pref = false; document.getElementById('ckPref').checked = false; }
   }
-
-  /* cash | card : soit reglement plein, soit reglement d'un tarif preferentiel deja choisi */
-  if(payMethod && payMethod.kind==='pref') {
-    payMethod.settle = m;
-    markSelected('pref');
-    document.querySelector('.pay-method[data-method="' + m + '"]').classList.add('selected');
-    sub.innerHTML = 'Tarif préférentiel <b style="color:var(--accent)">' + fmt(payMethod.amount) + '</b> réglé en <b>'
-      + (m==='cash' ? 'espèces' : 'carte') + '</b>';
-  } else {
-    markSelected(m);
-    payMethod = { kind:m, amount:total(), settle:m };
-    setPayAmountDisplay(total(), null);
-    adjust.style.display = 'none';
-    sub.textContent = m==='cash' ? 'Règlement en espèces, prix plein' : 'Règlement par carte, prix plein';
-  }
-  document.getElementById('btnConfirm').classList.add('show');
+  vibrate(15); refreshPay();
+}
+function onSettle(m) {
+  if(payState.gift) return;
+  payState.settle = m;
+  vibrate(15); refreshPay();
 }
 
 function confirmPay() {
-  if(!payMethod) return;
-  if(payMethod.kind==='pref' && !payMethod.settle) { showToast('Choisis Espèces ou Carte pour le règlement', 'err'); return; }
+  if(!payState) return;
+  if(!payState.gift && !payState.settle) { showToast('Choisis Espèces ou Carte pour le règlement', 'err'); return; }
+  const pm = {
+    kind:   payState.gift ? 'gift' : (payState.pref ? 'pref' : payState.settle),
+    amount: payAmount(),
+    settle: payState.gift ? '' : payState.settle
+  };
   const full  = total();
   const items = JSON.parse(JSON.stringify(cart));
-  const pm    = payMethod;
   recordSale(pm, full, items);
 
   /* Decrement du stock local (les dons libres ne consomment pas de stock) */
@@ -709,7 +722,7 @@ function confirmPay() {
     'ENCAISSÉ ' + fmt(pm.amount);
   const f = document.getElementById('flash');
   f.classList.add('show'); vibrate([30,60,30]);
-  setTimeout(()=>{ f.classList.remove('show'); payMethod=null; cart=[]; renderCart(); updateStockBadges(); }, 900);
+  setTimeout(()=>{ f.classList.remove('show'); payState=null; cart=[]; renderCart(); updateStockBadges(); }, 900);
 }
 
 /* ===== Sync Google Sheets ===== */
@@ -980,7 +993,7 @@ document.getElementById('btnAmountOk').addEventListener('click', ()=>{
 
 document.getElementById('closePin').addEventListener('click', closePinModal);
 document.getElementById('closeConfig').addEventListener('click', ()=>document.getElementById('configModal').classList.remove('open'));
-document.getElementById('closePay').addEventListener('click', ()=>{ payMethod=null; document.getElementById('payModal').classList.remove('open'); });
+document.getElementById('closePay').addEventListener('click', ()=>{ payState=null; document.getElementById('payModal').classList.remove('open'); });
 
 document.getElementById('btnConfig').addEventListener('click', ()=>{
   openPin(()=>{
@@ -998,15 +1011,15 @@ document.getElementById('btnResetLocal').addEventListener('click', ()=>{
   location.reload();
 });
 
-document.querySelectorAll('.pay-method').forEach(m=>m.addEventListener('click', ()=>selectMethod(m.dataset.method)));
+document.querySelectorAll('.pay-method').forEach(m=>m.addEventListener('click', ()=>onSettle(m.dataset.method)));
+document.getElementById('ckPref').addEventListener('change', onPrefToggle);
+document.getElementById('ckGift').addEventListener('change', onGiftToggle);
 document.getElementById('btnConfirm').addEventListener('click', confirmPay);
 document.getElementById('btnPrefAdjust').addEventListener('click', ()=>{
-  if(!payMethod || payMethod.kind!=='pref') return;
-  openAmountPad('Ajuster le tarif préf', 'Tarif préf du doc : ' + fmt(prefTotal()) + ' — prix plein : ' + fmt(total()), payMethod.amount, function(v){
-    payMethod.amount = v;
-    setPayAmountDisplay(v, total());
-    document.getElementById('paySub').innerHTML = 'Tarif ajusté : <b style="color:var(--accent)">' + fmt(v) + '</b> — remise ' + fmt(Math.max(0,total()-v))
-      + '<br><small>Choisis Espèces ou Carte pour le règlement</small>';
+  if(!payState || !payState.pref) return;
+  openAmountPad('Ajuster le tarif préf', 'Tarif préf du doc : ' + fmt(prefTotal()) + ' — prix plein : ' + fmt(total()), payAmount(), function(v){
+    payState.prefAmount = v;
+    refreshPay();
   });
 });
 </script>
