@@ -322,7 +322,7 @@
     <div class="pay-methods">
       <div class="pay-method" data-method="cash"><span class="pay-method-icon">💵</span>Espèces<span class="pm-hint">Prix plein</span></div>
       <div class="pay-method" data-method="card"><span class="pay-method-icon">💳</span>Carte<span class="pm-hint">Prix plein</span></div>
-      <div class="pay-method" data-method="pref"><span class="pay-method-icon">🏷️</span>Prix préf.<span class="pm-hint">Montant libre</span></div>
+      <div class="pay-method" data-method="pref"><span class="pay-method-icon">🏷️</span>Prix préf.<span class="pm-hint">Tarif du doc</span></div>
       <div class="pay-method" data-method="gift"><span class="pay-method-icon">🎁</span>Offert<span class="pm-hint">0 € — don</span></div>
     </div>
     <button class="btn-confirm" id="btnConfirm">✓ VALIDER</button>
@@ -343,35 +343,49 @@ const ACCESS_PIN = '1111';       // <-- Code d'acces au stand merch (a donner au
 const ADMIN_PIN  = '3216';       // <-- Code admin (stats, inventaire, prix)
 /* ============================================================ */
 
-/* Carte de secours : utilisee tant que la Sheet n'a pas repondu.
-   La source de verite = onglet "Inventaire" de la Google Sheet. */
-const DEFAULTS = [
-  { id:'tshirt',  name:'T-shirt',  cat:'textile', size:'S',  price:20, stock:0 },
-  { id:'tshirt',  name:'T-shirt',  cat:'textile', size:'M',  price:20, stock:0 },
-  { id:'tshirt',  name:'T-shirt',  cat:'textile', size:'L',  price:20, stock:0 },
-  { id:'tshirt',  name:'T-shirt',  cat:'textile', size:'XL', price:20, stock:0 },
-  { id:'sweat',   name:'Sweat',    cat:'textile', size:'S',  price:35, stock:0 },
-  { id:'sweat',   name:'Sweat',    cat:'textile', size:'M',  price:35, stock:0 },
-  { id:'sweat',   name:'Sweat',    cat:'textile', size:'L',  price:35, stock:0 },
-  { id:'sweat',   name:'Sweat',    cat:'textile', size:'XL', price:35, stock:0 },
-  { id:'tote',    name:'Tote bag', cat:'access',  size:'',   price:10, stock:0 },
-  { id:'bob',     name:'Bob',      cat:'access',  size:'',   price:15, stock:0 },
-  { id:'sticker', name:'Sticker',  cat:'print',   size:'',   price:2,  stock:0 },
-  { id:'badge',   name:'Badge',    cat:'print',   size:'',   price:2,  stock:0 },
-  { id:'affiche', name:'Affiche',  cat:'print',   size:'',   price:5,  stock:0 },
-  { id:'vinyle',  name:'Vinyle',   cat:'music',   size:'',   price:20, stock:0 },
-  { id:'cd',      name:'CD',       cat:'music',   size:'',   price:10, stock:0 },
+/* Carte de secours : utilisee au 1er chargement / hors-ligne, tant que la Sheet
+   n'a pas repondu. La SOURCE DE VERITE = onglet "Inventaire" (stock par taille)
+   + onglet "Rentabilite" (PU Public / PU Pref) de la Google Sheet.
+   Format compact : [nom, categorie, PU public, PU pref, { taille: stock }]. */
+const SEED = [
+  ['T-Shirt La Java - Noir (Hiver 2026)', 'tee', 25, 20, {XS:2,S:0,M:0,L:2,XL:5,'2XL':1,'3XL':1}],
+  ['T-Shirt La Java - Crème',             'tee', 25, 20, {XS:2,S:1,M:3,L:6}],
+  ['T-Shirt La Java - Bleu',              'tee', 25, 20, {XS:2,S:2,M:4,L:7,XL:6,'2XL':2,'3XL':2}],
+  ['T-Shirt La Java - Blanc (Été 2026)',  'tee', 30, 25, {XS:3,S:6,M:16,L:16,XL:6,'2XL':3}],
+  ['Pull à capuche La Java - Bleu nuit',  'pull', 50, 40, {XS:2,S:3,M:8,L:8,XL:3,'2XL':1}],
+  ['Pull à capuche La Java - Olive',      'pull', 50, 40, {XS:1,S:3,M:8,L:8,XL:3,'2XL':2}],
+  ['Pull à capuche La Java - Noir',       'pull', 50, 40, {XS:1,S:1}],
+  ['Tote Bag La Java',                    'tote', 12, 10, {TU:37}],
+  ['T-Shirt DLZ2025 - Noir',              'tee', 28, 22, {M:2,XL:6,'2XL':1}],
+  ['T-Shirt DLZ2025 - Marron',            'tee', 28, 22, {L:2,XL:5}],
+  ['T-Shirt DLZ2026 - Noir',              'tee', 30, 25, {S:3,M:14,L:16,XL:5,'2XL':1,'3XL':1}],
+  ['T-Shirt DLZ2026 - Vert',              'tee', 30, 25, {S:3,M:14,L:16,XL:5,'2XL':1,'3XL':1}],
 ];
 
+function slug(name) {
+  return name.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+}
+function expandSeed() {
+  const out = [];
+  SEED.forEach(function(s){
+    const name=s[0], cat=s[1], pub=s[2], pref=s[3], sizes=s[4], id=slug(name);
+    Object.keys(sizes).forEach(function(sz){
+      out.push({ id:id, name:name, cat:cat, size:sz, price:pub, pricePref:pref, stock:sizes[sz] });
+    });
+  });
+  return out;
+}
+
 const CAT_LABELS = {
-  textile: '👕 Textile',
-  access:  '🎒 Accessoires',
-  print:   '🖼️ Print',
-  music:   '💿 Musique',
-  autre:   '📦 Autre',
+  tee:   '👕 T-shirts',
+  pull:  '🧥 Pulls & Hoodies',
+  tote:  '🎒 Tote bags',
+  autre: '📦 Autre',
 };
-const CAT_ORDER  = ['textile','access','print','music','autre'];
-const CAT_COLORS = { textile:'c-tee', access:'c-acc', print:'c-print', music:'c-music', autre:'c-acc' };
+const CAT_ORDER  = ['tee','pull','tote','autre'];
+const CAT_COLORS = { tee:'c-tee', pull:'c-sweat', tote:'c-acc', autre:'c-acc' };
 
 const K_CATALOG = 'ljm_catalog_v1';
 const K_SOLD    = 'ljm_sold_v1';
@@ -384,7 +398,7 @@ function rowKey(r) { return r.id + '|' + (r.size || ''); }
 
 function loadCatalog() {
   try { const s = localStorage.getItem(K_CATALOG); if(s) return JSON.parse(s); } catch {}
-  return JSON.parse(JSON.stringify(DEFAULTS));
+  return expandSeed();
 }
 function saveCatalog() { localStorage.setItem(K_CATALOG, JSON.stringify(catalog)); }
 function loadSold() { try { return JSON.parse(localStorage.getItem(K_SOLD) || '{}'); } catch { return {}; } }
@@ -462,7 +476,7 @@ function prodBtn(g) {
 function onProductClick(pid, btnEl) {
   const rows = catalog.filter(r=>r.id===pid);
   if(!rows.length) return;
-  if(rows.length===1 && !rows[0].size) { addRow(rows[0], btnEl); return; }
+  if(rows.length===1) { addRow(rows[0], btnEl); return; }   // une seule ligne (ex tote TU) → direct
   openSizePicker(rows);
 }
 
@@ -492,7 +506,7 @@ function addRow(r, btnEl) {
   if(remaining(r) <= 0) showToast('⚠ Stock à 0 sur ' + r.name + (r.size?' '+r.size:'') + ' — ajouté quand même', 'err');
   const ex = cart.find(i=>i.key===k);
   if(ex) ex.qty++;
-  else cart.push({ key:k, id:r.id, name:r.name, size:r.size||'', price:r.price, qty:1, type:'item' });
+  else cart.push({ key:k, id:r.id, name:r.name, size:r.size||'', price:r.price, pricePref:(r.pricePref!=null?r.pricePref:r.price), qty:1, type:'item' });
   vibrate(15);
   if(btnEl) { const f=document.createElement('div'); f.className='float-plus'; f.textContent='+1'; btnEl.appendChild(f); setTimeout(()=>f.remove(),600); }
   renderCart(); renderGrid();
@@ -518,6 +532,8 @@ function removeLast() {
 function removeItem(key) { vibrate(20); cart = cart.filter(i=>i.key!==key); renderCart(); renderGrid(); }
 function clearCart()     { if(!cart.length) return; vibrate([20,40,20]); cart=[]; renderCart(); renderGrid(); }
 function total()         { return cart.reduce((s,i)=>s+i.price*i.qty,0); }
+/* Total au tarif preferentiel officiel (PU Pref du doc) ; un don libre garde sa valeur */
+function prefTotal()     { return cart.reduce((s,i)=>s + (i.type==='don' ? i.price : (i.pricePref!=null?i.pricePref:i.price)) * i.qty, 0); }
 
 function renderCart() {
   const el = document.getElementById('ticketItems');
@@ -592,7 +608,8 @@ function selectMethod(m) {
 
   if(m==='pref') {
     markSelected('pref');
-    openAmountPad('Prix préférentiel', 'Prix plein : ' + fmt(total()) + ' — saisis le montant réellement payé', total(), function(v){
+    const suggested = prefTotal();
+    openAmountPad('Prix préférentiel', 'Prix plein : ' + fmt(total()) + ' — tarif préf proposé ' + fmt(suggested) + ' (modifiable)', suggested, function(v){
       payMethod = { kind:'pref', amount:v, settle:null };
       markSelected('pref');
       sub.innerHTML = 'Tarif préférentiel : <b style="color:var(--accent)">' + fmt(v) + '</b> — remise ' + fmt(Math.max(0,total()-v))
@@ -687,7 +704,7 @@ async function recordSale(pm, fullPrice, items) {
     amount: pm.amount,                        // montant reellement encaisse
     fullPrice: fullPrice,                     // prix plein du panier
     discount: Math.max(0, fullPrice - pm.amount),
-    items: items.map(i=>({ id:i.id, name:i.name, size:i.size, qty:i.qty, price:i.price, type:i.type })),
+    items: items.map(i=>({ id:i.id, name:i.name, size:i.size, qty:i.qty, price:i.price, pricePref:(i.pricePref!=null?i.pricePref:i.price), type:i.type })),
     deviceId: getDeviceId()
   };
   setSyncStatus('pending');
@@ -722,7 +739,9 @@ async function reloadCatalog(silent) {
     if(!Array.isArray(d.rows) || !d.rows.length) throw new Error('Inventaire vide');
     catalog = d.rows.map(x=>({
       id: String(x.id), name: x.name, cat: x.cat || 'autre',
-      size: x.size || '', price: Number(x.price)||0, stock: Number(x.initial)||0
+      size: x.size || '', price: Number(x.price)||0,
+      pricePref: (x.pricePref!=null && x.pricePref!=='' ? Number(x.pricePref) : Number(x.price)||0),
+      stock: Number(x.initial)||0
     }));
     sold = {};
     d.rows.forEach(x=>{ sold[String(x.id) + '|' + (x.size||'')] = Number(x.out)||0; });
@@ -773,26 +792,25 @@ async function fetchInventory() {
       if(r.ok) { const d = await r.json(); if(Array.isArray(d.rows)) rows = d.rows; }
     } catch(e) {}
   }
+  let fromLocal = false;
   if(!rows) {
-    rows = catalog.map(r=>({ id:r.id, name:r.name, size:r.size, initial:r.stock, sold:soldOf(rowKey(r)), gifted:0, out:soldOf(rowKey(r)) }));
+    rows = catalog.map(r=>({ name:r.name, size:r.size, initial:Math.max(0, r.stock - soldOf(rowKey(r))) }));
+    fromLocal = true;
     showToast('Inventaire affiché depuis le cache local', 'err');
   }
-  el.innerHTML = '<div class="inv-row head"><span>Produit</span><span class="inv-num">Init.</span><span class="inv-num">Vendu</span><span class="inv-num">Offert</span><span class="inv-num">Reste</span></div>'
+  const totalRest = rows.reduce((s,r)=>s+(Number(r.initial)||0),0);
+  el.innerHTML = '<div class="inv-row head"><span>Produit</span><span class="inv-num">Taille</span><span class="inv-num">Reste</span></div>'
     + rows.map(r=>{
-        const init = Number(r.initial)||0;
-        const out  = (r.out !== undefined && r.out !== null && r.out !== '')
-                     ? Number(r.out)||0
-                     : (Number(r.sold)||0) + (Number(r.gifted)||0) + (Number(r.pref)||0);
-        const rest = init - out;
+        const rest = Number(r.initial)||0;
         const cls  = rest<=0 ? 'out' : (rest<=3 ? 'low' : '');
-        return '<div class="inv-row">'
-          + '<span class="inv-name">' + r.name + (r.size ? ' <small style="color:var(--muted)">' + r.size + '</small>' : '') + '</span>'
-          + '<span class="inv-num">' + init + '</span>'
-          + '<span class="inv-num">' + (Number(r.sold)||0) + '</span>'
-          + '<span class="inv-num">' + (Number(r.gifted)||0) + '</span>'
+        return '<div class="inv-row invrow3">'
+          + '<span class="inv-name">' + r.name + '</span>'
+          + '<span class="inv-num">' + (r.size || '—') + '</span>'
           + '<span class="inv-rest ' + cls + '">' + rest + '</span>'
           + '</div>';
-      }).join('');
+      }).join('')
+    + '<div class="inv-row invrow3" style="background:var(--bg);font-weight:900;"><span class="inv-name">TOTAL pièces restantes</span><span class="inv-num"></span><span class="inv-rest">' + totalRest + '</span></div>';
+  el.querySelectorAll('.inv-row').forEach(x=>x.style.gridTemplateColumns='1fr 56px 56px');
 }
 
 function renderConfig() {

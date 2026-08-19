@@ -1,287 +1,385 @@
 /**
- * CAISSE MERCH — LA JAVA
- * Script Google Apps Script à coller dans la Google Sheet "Merch La Java".
+ * CAISSE MERCH — LA JAVA  ·  connecteur pour TON doc existant
+ * ───────────────────────────────────────────────────────────────────────────
+ * Doc : "Inventaire Merch" (onglets Inventaire / Rentabilité / Grille de tarif.)
  *
- * ── INSTALLATION ────────────────────────────────────────────────────────────
- * 1. Ouvre ta Google Sheet merch → menu Extensions → Apps Script
- * 2. Supprime le code existant, colle TOUT ce fichier, sauvegarde
- * 3. Lance une fois la fonction  setup()  (menu déroulant en haut → setup → ▶)
- *    Elle crée les 2 onglets avec les bons en-têtes.
- * 4. Déployer → Nouveau déploiement → type "Application Web"
- *      - Exécuter en tant que : Moi
- *      - Qui a accès          : Tout le monde
- * 5. Copie l'URL /exec et colle-la dans merch.html → SHEETS_WEBHOOK_URL
+ * CE QUE FAIT CE SCRIPT
+ *  • Lit la carte pour l'app : articles + tailles + stock (onglet Inventaire)
+ *    croisés avec les prix PU Public / PU Préf (onglet Rentabilité).
+ *  • À chaque encaissement envoyé par l'app :
+ *      – décrémente la bonne case TAILLE dans Inventaire (le stock "vivant") ;
+ *      – incrémente le compteur Normal / Préf / Don de l'article dans Rentabilité ;
+ *      – journalise la vente dans un onglet "Ventes" (créé automatiquement).
+ *  • Ne touche JAMAIS aux colonnes en formule (Total, Valeur, CA, Marge, ROI…).
  *
- * ⚠ À chaque modification de ce script : Déployer → Gérer les déploiements →
- *   ✏ modifier → Version "Nouvelle version" → Déployer. (Sinon l'URL sert
- *   toujours l'ancien code.)
+ * INSTALLATION
+ *  1. Ta Sheet → Extensions → Apps Script → colle tout ce fichier → 💾
+ *  2. Lance une fois  verifierStructure()  (menu ▶) : une alerte te dit si le
+ *     script retrouve bien tes colonnes. Corrige les libellés si besoin.
+ *  3. Déployer → Nouveau déploiement → "Application Web"
+ *        Exécuter en tant que : Moi   |   Qui a accès : Tout le monde
+ *  4. Copie l'URL /exec → colle-la dans merch.html → SHEETS_WEBHOOK_URL
  *
- * ── COMMENT ÇA MARCHE ───────────────────────────────────────────────────────
- * Onglet INVENTAIRE = la carte ET le stock. C'est LE doc de référence.
- *   Colonnes A→F remplies à la main (après l'inventaire papier).
- *   Colonnes G→L recalculées automatiquement à chaque encaissement.
- * Onglet VENTES = le journal, une ligne par encaissement.
+ *  ⚠ À CHAQUE modif de ce script : Déployer → Gérer les déploiements →
+ *     ✏ → Version « Nouvelle version » → Déployer (sinon l'ancienne URL sert
+ *     l'ancien code).
+ *
+ * SI TU RENOMMES / DÉPLACES DES COLONNES : rien à recoder, le script les
+ *  retrouve par leur libellé (voir la section LIBELLÉS ci-dessous).
  */
 
+/* ─── Noms d'onglets ─────────────────────────────────────────────────────── */
 var SH_INV   = 'Inventaire';
+var SH_RENT  = 'Rentabilité';
 var SH_SALES = 'Ventes';
 
-var INV_HEADERS = [
-  'ID', 'Produit', 'Catégorie', 'Taille', 'Prix', 'Stock initial',
-  'Vendus', 'Offerts', 'Tarif préf.', 'Total sorti', 'Stock restant', 'CA généré'
-];
-var SALES_HEADERS = [
-  'Horodatage', 'Mode', 'Règlement', 'Montant encaissé', 'Prix plein',
-  'Remise', 'Dons libres', 'Articles', 'Appareil'
-];
+/* ─── LIBELLÉS attendus (adapte ici si tu changes un intitulé) ───────────── */
+var LBL_ARTICLE   = 'Article';
+var LBL_MARQUE    = 'Marque';
+var SIZE_LABELS   = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'TU'];  // TU = taille unique (tote)
+var LBL_PRODUITE  = 'Produite';
+var LBL_NORMAL    = 'Normal';
+var LBL_PREF      = 'Préf';
+var LBL_DON       = 'Don';
+var LBL_PU_PUBLIC = 'PU Public';
+var LBL_PU_PREF   = 'PU Préf';
 
-/* Colonnes Inventaire (1-indexé) */
-var C_ID = 1, C_NAME = 2, C_CAT = 3, C_SIZE = 4, C_PRICE = 5, C_INIT = 6,
-    C_SOLD = 7, C_GIFT = 8, C_PREF = 9, C_OUT = 10, C_REST = 11, C_CA = 12;
+var SALES_HEADERS = ['Horodatage', 'Mode', 'Règlement', 'Montant encaissé',
+                     'Prix plein', 'Remise', 'Don libre', 'Articles', 'Appareil'];
 
-/* ────────────────────────────────────────────────────────────────────────── */
-/* SETUP                                                                      */
-/* ────────────────────────────────────────────────────────────────────────── */
-function setup() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  var inv = ss.getSheetByName(SH_INV) || ss.insertSheet(SH_INV);
-  if (inv.getLastRow() === 0) {
-    inv.getRange(1, 1, 1, INV_HEADERS.length).setValues([INV_HEADERS]);
-    // Quelques lignes d'exemple — remplace-les par ta vraie carte merch
-    inv.getRange(2, 1, 4, 6).setValues([
-      ['tshirt', 'T-shirt', 'textile', 'S',  20, 0],
-      ['tshirt', 'T-shirt', 'textile', 'M',  20, 0],
-      ['tote',   'Tote bag', 'access', '',   10, 0],
-      ['sticker','Sticker',  'print',  '',    2, 0]
-    ]);
-  }
-  inv.getRange(1, 1, 1, INV_HEADERS.length).setFontWeight('bold').setBackground('#f0f0f0');
-  inv.setFrozenRows(1);
-
-  var sales = ss.getSheetByName(SH_SALES) || ss.insertSheet(SH_SALES);
-  if (sales.getLastRow() === 0) {
-    sales.getRange(1, 1, 1, SALES_HEADERS.length).setValues([SALES_HEADERS]);
-  }
-  sales.getRange(1, 1, 1, SALES_HEADERS.length).setFontWeight('bold').setBackground('#f0f0f0');
-  sales.setFrozenRows(1);
-
-  recomputeInventory();
-  SpreadsheetApp.getUi().alert('Setup terminé.\n\nRemplis maintenant l\'onglet "Inventaire" colonnes A→F avec ta carte merch et les stocks de départ.');
-}
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/* RECEPTION D'UNE VENTE (POST depuis merch.html)                             */
-/* ────────────────────────────────────────────────────────────────────────── */
-function doPost(e) {
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(20000); } catch (err) { return json({ ok: false, error: 'lock' }); }
+/* ══════════════════════════════════════════════════════════════════════════
+   OUTIL DE CONTRÔLE — lance-le une fois après avoir collé le script
+   ══════════════════════════════════════════════════════════════════════════ */
+function verifierStructure() {
+  var msg = [];
+  try {
+    var inv = locateInventory();
+    msg.push('✅ Inventaire : en-tête ligne ' + inv.headerRow +
+             ', Article col ' + inv.cArticle +
+             ', tailles trouvées : ' + Object.keys(inv.sizeCols).join(', ') +
+             ', ' + inv.articles.length + ' article(s).');
+  } catch (e) { msg.push('❌ Inventaire : ' + e.message); }
 
   try {
-    var sale = JSON.parse(e.postData.contents);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sales = ss.getSheetByName(SH_SALES) || ss.insertSheet(SH_SALES);
-    if (sales.getLastRow() === 0) sales.getRange(1, 1, 1, SALES_HEADERS.length).setValues([SALES_HEADERS]);
+    var rent = locateRentabilite();
+    msg.push('✅ Rentabilité : en-tête ligne ' + rent.headerRow +
+             ' | Produite=' + col(rent.cProduite) + ' Normal=' + col(rent.cNormal) +
+             ' Préf=' + col(rent.cPref) + ' Don=' + col(rent.cDon) +
+             ' PU Public=' + col(rent.cPub) + ' PU Préf=' + col(rent.cPref2) +
+             ' | ' + rent.articles.length + ' article(s).');
+  } catch (e) { msg.push('❌ Rentabilité : ' + e.message); }
 
-    var items = sale.items || [];
-    var donAmount = 0, articles = [];
-    items.forEach(function (it) {
-      if (it.type === 'don') { donAmount += num(it.price) * num(it.qty); articles.push('Don ' + money(num(it.price) * num(it.qty))); }
-      else articles.push(num(it.qty) + '× ' + it.name + (it.size ? ' ' + it.size : ''));
-    });
+  var inv2;
+  try { inv2 = getInventory(); msg.push('✅ Carte app : ' + inv2.rows.length + ' ligne(s) taille prêtes pour la caisse.'); }
+  catch (e) { msg.push('❌ Carte app : ' + e.message); }
 
-    sales.appendRow([
-      new Date(sale.ts || new Date()),
-      labelMode(sale.method),
-      labelSettle(sale.settle, sale.method),
-      num(sale.amount),
-      num(sale.fullPrice),
-      num(sale.discount),
-      donAmount,
-      articles.join(', '),
-      sale.deviceId || ''
-    ]);
-
-    applyToInventory(sale);
-    return json({ ok: true });
-
-  } catch (err) {
-    return json({ ok: false, error: String(err) });
-  } finally {
-    lock.releaseLock();
-  }
+  SpreadsheetApp.getUi().alert('CONTRÔLE STRUCTURE\n\n' + msg.join('\n\n'));
 }
+function col(n) { return n ? columnLetter(n) : '—'; }
 
-/**
- * Met à jour l'onglet Inventaire : incrémente Vendus / Offerts / Tarif préf.
- * et le CA attribué à chaque ligne, puis recalcule Total sorti et Stock restant.
- * Une ligne inconnue est créée automatiquement (stock initial 0, à corriger à la main).
- */
-function applyToInventory(sale) {
-  var items = (sale.items || []).filter(function (it) { return it.type !== 'don'; });
-  if (!items.length) return;
-
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var inv = ss.getSheetByName(SH_INV) || ss.insertSheet(SH_INV);
-  if (inv.getLastRow() === 0) inv.getRange(1, 1, 1, INV_HEADERS.length).setValues([INV_HEADERS]);
-
-  var last = inv.getLastRow();
-  var data = last > 1 ? inv.getRange(2, 1, last - 1, INV_HEADERS.length).getValues() : [];
-
-  var index = {};
-  for (var i = 0; i < data.length; i++) {
-    index[key(data[i][C_ID - 1], data[i][C_SIZE - 1])] = i + 2;  // n° de ligne
-  }
-
-  /* Répartition du montant encaissé au prorata du prix plein de chaque ligne */
-  var basketFull = 0;
-  items.forEach(function (it) { basketFull += num(it.price) * num(it.qty); });
-  var cashable = num(sale.amount) - donsIn(sale);   // part hors don libre
-  if (cashable < 0) cashable = 0;
-
-  items.forEach(function (it) {
-    var k = key(it.id, it.size);
-    var r = index[k];
-
-    if (!r) {   // produit inconnu de l'inventaire → on crée la ligne
-      inv.appendRow([it.id, it.name, '', it.size || '', num(it.price), 0, 0, 0, 0, 0, 0, 0]);
-      r = inv.getLastRow();
-      index[k] = r;
-    }
-
-    var qty  = num(it.qty);
-    var lineFull = num(it.price) * qty;
-    var lineCA = basketFull > 0 ? cashable * (lineFull / basketFull) : 0;
-
-    var col = sale.method === 'gift' ? C_GIFT : (sale.method === 'pref' ? C_PREF : C_SOLD);
-    bump(inv, r, col, qty);
-    bump(inv, r, C_CA, Math.round(lineCA * 100) / 100);
-    refreshRow(inv, r);
-  });
-}
-
-function bump(sheet, row, col, delta) {
-  var cell = sheet.getRange(row, col);
-  cell.setValue(num(cell.getValue()) + delta);
-}
-
-/** Recalcule Total sorti / Stock restant d'une ligne */
-function refreshRow(inv, r) {
-  var v = inv.getRange(r, 1, 1, INV_HEADERS.length).getValues()[0];
-  var out = num(v[C_SOLD - 1]) + num(v[C_GIFT - 1]) + num(v[C_PREF - 1]);
-  inv.getRange(r, C_OUT).setValue(out);
-  inv.getRange(r, C_REST).setValue(num(v[C_INIT - 1]) - out);
-}
-
-/** Recalcule tout l'onglet Inventaire (utile après une correction manuelle) */
-function recomputeInventory() {
-  var inv = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_INV);
-  if (!inv || inv.getLastRow() < 2) return;
-  for (var r = 2; r <= inv.getLastRow(); r++) refreshRow(inv, r);
-}
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/* LECTURE (GET depuis merch.html)                                            */
-/* ────────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════
+   LECTURE  (GET depuis l'app)
+   ══════════════════════════════════════════════════════════════════════════ */
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || 'stats';
   if (action === 'inventory') return json(getInventory());
   return json(getStats());
 }
 
-/** Carte + stock : ce que l'app charge au démarrage */
+/** Carte + stock par taille + prix, prête pour la grille de l'app. */
 function getInventory() {
-  var inv = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_INV);
-  if (!inv || inv.getLastRow() < 2) return { rows: [] };
+  var inv  = locateInventory();
+  var rent = locateRentabilite();
+  var prices = rent.priceByName;   // nom normalisé -> { pub, pref }
 
-  var data = inv.getRange(2, 1, inv.getLastRow() - 1, INV_HEADERS.length).getValues();
   var rows = [];
-  data.forEach(function (v) {
-    if (!v[C_ID - 1]) return;
-    var sold = num(v[C_SOLD - 1]), gift = num(v[C_GIFT - 1]), pref = num(v[C_PREF - 1]);
-    rows.push({
-      id:      String(v[C_ID - 1]).trim(),
-      name:    String(v[C_NAME - 1]).trim(),
-      cat:     String(v[C_CAT - 1] || 'autre').trim().toLowerCase(),
-      size:    String(v[C_SIZE - 1] || '').trim(),
-      price:   num(v[C_PRICE - 1]),
-      initial: num(v[C_INIT - 1]),
-      sold:    sold,
-      gifted:  gift,
-      pref:    pref,
-      out:     sold + gift + pref
+  inv.articles.forEach(function (a) {   // a = { name, row, values }
+    var p = prices[norm(a.name)] || { pub: 0, pref: 0 };
+    var id = slug(a.name);
+    var cat = categoryOf(a.name);
+    inv.sizeOrder.forEach(function (s) {   // s = { label, colIndexInValues, shared }
+      var raw = a.values[s.idx];
+      if (raw === '' || raw === null || raw === undefined) return;   // taille non proposée
+      var stock = Number(raw);
+      if (isNaN(stock)) return;
+      var label = s.shared ? (cat === 'tote' ? 'TU' : '3XL') : s.label;
+      rows.push({
+        id: id, name: a.name, cat: cat, size: label,
+        price: p.pub, pricePref: p.pref,
+        initial: stock, out: 0
+      });
     });
   });
   return { rows: rows };
 }
 
-/** Totaux d'encaissement, toutes caisses confondues */
+/** Totaux caisse depuis le journal Ventes. */
 function getStats() {
-  var sales = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_SALES);
-  var s = {
-    cash: 0, card: 0, countCash: 0, countCard: 0,
-    countPref: 0, discount: 0,
-    countGift: 0, giftedUnits: 0, giftedValue: 0,
-    countDon: 0, donAmount: 0
-  };
-  if (!sales || sales.getLastRow() < 2) return s;
+  var s = { cash:0, card:0, countCash:0, countCard:0,
+            countPref:0, discount:0,
+            countGift:0, giftedUnits:0, giftedValue:0,
+            countDon:0, donAmount:0 };
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_SALES);
+  if (!sh || sh.getLastRow() < 2) return s;
 
-  var data = sales.getRange(2, 1, sales.getLastRow() - 1, SALES_HEADERS.length).getValues();
+  var data = sh.getRange(2, 1, sh.getLastRow() - 1, SALES_HEADERS.length).getValues();
   data.forEach(function (v) {
-    var mode   = String(v[1] || '');
-    var settle = String(v[2] || '');
-    var amount = num(v[3]), full = num(v[4]), disc = num(v[5]), don = num(v[6]);
-    var arts   = String(v[7] || '');
-
-    if (settle.indexOf('spèce') >= 0)   { s.cash += amount; s.countCash++; }
-    else if (settle.indexOf('arte') >= 0) { s.card += amount; s.countCard++; }
-
-    if (mode.indexOf('référ') >= 0) { s.countPref++; s.discount += disc; }
-    if (mode.indexOf('ffert') >= 0) { s.countGift++; s.giftedValue += full; s.giftedUnits += countUnits(arts); }
-    if (don > 0) { s.countDon++; s.donAmount += don; }
+    var mode = String(v[1] || ''), settle = String(v[2] || '');
+    var amount = num(v[3]), full = num(v[4]), disc = num(v[5]), don = num(v[6]), arts = String(v[7] || '');
+    if (settle.indexOf('spèce') >= 0)      { s.cash += amount; s.countCash++; }
+    else if (settle.indexOf('arte') >= 0)  { s.card += amount; s.countCard++; }
+    if (mode.indexOf('référ') >= 0)        { s.countPref++; s.discount += disc; }
+    if (mode.indexOf('ffert') >= 0)        { s.countGift++; s.giftedValue += full; s.giftedUnits += countUnits(arts); }
+    if (don > 0)                            { s.countDon++; s.donAmount += don; }
   });
-
-  ['cash', 'card', 'discount', 'giftedValue', 'donAmount'].forEach(function (k) {
-    s[k] = Math.round(s[k] * 100) / 100;
-  });
+  ['cash','card','discount','giftedValue','donAmount'].forEach(function (k) { s[k] = round2(s[k]); });
   return s;
 }
 
-/* ────────────────────────────────────────────────────────────────────────── */
-/* Helpers                                                                    */
-/* ────────────────────────────────────────────────────────────────────────── */
-function key(id, size) { return String(id).trim() + '|' + String(size || '').trim(); }
-function num(v) { var n = Number(v); return isNaN(n) ? 0 : n; }
-function money(n) { return (Math.round(n * 100) / 100).toFixed(2) + ' €'; }
-
-function donsIn(sale) {
-  return (sale.items || []).reduce(function (t, it) {
-    return it.type === 'don' ? t + num(it.price) * num(it.qty) : t;
-  }, 0);
+/* ══════════════════════════════════════════════════════════════════════════
+   ÉCRITURE  (POST depuis l'app)
+   ══════════════════════════════════════════════════════════════════════════ */
+function doPost(e) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (err) { return json({ ok:false, error:'lock' }); }
+  try {
+    var sale = JSON.parse(e.postData.contents);
+    journalize(sale);
+    applyToSheet(sale);
+    return json({ ok:true });
+  } catch (err) {
+    return json({ ok:false, error:String(err) });
+  } finally {
+    lock.releaseLock();
+  }
 }
 
-function countUnits(articles) {
-  var total = 0;
-  String(articles).split(',').forEach(function (p) {
-    var m = p.match(/(\d+)×/);
-    if (m) total += Number(m[1]);
+function journalize(sale) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(SH_SALES);
+  if (!sh) {
+    sh = ss.insertSheet(SH_SALES);
+    sh.getRange(1, 1, 1, SALES_HEADERS.length).setValues([SALES_HEADERS])
+      .setFontWeight('bold').setBackground('#f0f0f0');
+    sh.setFrozenRows(1);
+  }
+  var items = sale.items || [];
+  var don = 0, arts = [];
+  items.forEach(function (it) {
+    if (it.type === 'don') { don += num(it.price) * num(it.qty); arts.push('Don ' + money(num(it.price) * num(it.qty))); }
+    else arts.push(num(it.qty) + '× ' + it.name + (it.size ? ' ' + it.size : ''));
   });
-  return total;
+  sh.appendRow([
+    new Date(sale.ts || new Date()),
+    labelMode(sale.method), labelSettle(sale.settle, sale.method),
+    num(sale.amount), num(sale.fullPrice), num(sale.discount),
+    don, arts.join(', '), sale.deviceId || ''
+  ]);
 }
 
+/** Décrémente le stock par taille (Inventaire) + compteurs (Rentabilité). */
+function applyToSheet(sale) {
+  var items = (sale.items || []).filter(function (it) { return it.type !== 'don'; });
+  if (!items.length) return;
+
+  var inv  = locateInventory();
+  var rent = locateRentabilite();
+  var invSheet  = inv.sheet;
+  var rentSheet = rent.sheet;
+
+  var counterCol = sale.method === 'gift' ? rent.cDon
+                 : sale.method === 'pref' ? rent.cPref
+                 : rent.cNormal;   // cash | card => vente "normale"
+
+  items.forEach(function (it) {
+    var nkey = norm(it.name);
+
+    /* 1) Inventaire : baisse la case taille */
+    var artRow = inv.rowByName[nkey];
+    if (artRow) {
+      var sizeCol = resolveSizeCol(inv, it.size, categoryOf(it.name));
+      if (sizeCol) {
+        var cell = invSheet.getRange(artRow, sizeCol);
+        var cur = num(cell.getValue());
+        cell.setValue(Math.max(0, cur - num(it.qty)));
+      }
+    }
+
+    /* 2) Rentabilité : incrémente Normal / Préf / Don */
+    var rRow = rent.rowByName[nkey];
+    if (rRow && counterCol) {
+      var c = rentSheet.getRange(rRow, counterCol);
+      c.setValue(num(c.getValue()) + num(it.qty));
+    }
+  });
+}
+
+/** Recalcule tout au cas où (les formules Sheet le font seules ; ceci est un filet). */
+function forcerRecalcul() { SpreadsheetApp.flush(); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LOCALISATION DES ONGLETS / COLONNES  (détection par libellé)
+   ══════════════════════════════════════════════════════════════════════════ */
+function locateInventory() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_INV);
+  if (!sheet) throw new Error('Onglet "' + SH_INV + '" introuvable');
+  var lastRow = sheet.getLastRow(), lastCol = sheet.getLastColumn();
+  var grid = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+
+  /* en-tête = ligne contenant "Article" */
+  var headerRow = -1, cArticle = -1;
+  for (var r = 0; r < Math.min(grid.length, 20); r++) {
+    for (var c = 0; c < grid[r].length; c++) {
+      if (String(grid[r][c]).trim() === LBL_ARTICLE) { headerRow = r; cArticle = c; break; }
+    }
+    if (headerRow >= 0) break;
+  }
+  if (headerRow < 0) throw new Error('Ligne d\'en-tête (cellule "' + LBL_ARTICLE + '") non trouvée');
+
+  var cMarque = findInRow(grid[headerRow], LBL_MARQUE);
+
+  /* tailles : cherchées sur la ligne d'en-tête ET la suivante (sous-titres XS/S/M…) */
+  var sizeCols = {};
+  [headerRow, headerRow + 1].forEach(function (rr) {
+    if (rr >= grid.length) return;
+    grid[rr].forEach(function (cell, ci) {
+      var t = String(cell).trim();
+      if (t === 'XS')  sizeCols['XS']  = ci + 1;
+      else if (t === 'S')   sizeCols['S']   = ci + 1;
+      else if (t === 'M')   sizeCols['M']   = ci + 1;
+      else if (t === 'L')   sizeCols['L']   = ci + 1;
+      else if (t === 'XL')  sizeCols['XL']  = ci + 1;
+      else if (t === '2XL') sizeCols['2XL'] = ci + 1;
+      else if (/3XL/.test(t) || /(^|\W)TU(\W|$)/.test(t)) { sizeCols['3XL/TU'] = ci + 1; }
+    });
+  });
+  if (!Object.keys(sizeCols).length) throw new Error('Aucune colonne de taille (XS…3XL/TU) trouvée');
+
+  /* ordre des tailles pour la lecture ligne par ligne */
+  var order = [];
+  ['XS','S','M','L','XL','2XL'].forEach(function (sz) {
+    if (sizeCols[sz]) order.push({ label: sz, col: sizeCols[sz], shared: false });
+  });
+  if (sizeCols['3XL/TU']) order.push({ label: '3XL/TU', col: sizeCols['3XL/TU'], shared: true });
+
+  /* données : de headerRow+2 jusqu'à une ligne Article vide / "TOTAL" */
+  var firstData = headerRow + 2;   // saute la ligne des sous-titres tailles
+  var articles = [], rowByName = {};
+  for (var rr = firstData; rr < grid.length; rr++) {
+    var name = String(grid[rr][cArticle]).trim();
+    if (name === '') continue;
+    if (/^total/i.test(name)) break;
+    var values = order.map(function (o) { return grid[rr][o.col - 1]; });
+    var sizeOrder = order.map(function (o, idx) { return { label: o.label, idx: idx, shared: o.shared }; });
+    articles.push({ name: name, row: rr + 1, values: values, sizeOrder: sizeOrder });
+    rowByName[norm(name)] = rr + 1;
+  }
+  var globalSizeOrder = order.map(function (o, idx) { return { label: o.label, idx: idx, shared: o.shared }; });
+
+  return {
+    sheet: sheet, headerRow: headerRow + 1, cArticle: cArticle + 1, cMarque: cMarque,
+    sizeCols: sizeCols, sizeOrder: globalSizeOrder,
+    articles: articles, rowByName: rowByName
+  };
+}
+
+/** Retrouve la colonne Inventaire d'une taille donnée pour un article. */
+function resolveSizeCol(inv, size, cat) {
+  var s = String(size || '').trim().toUpperCase();
+  if (s === 'TU' || s === '3XL') return inv.sizeCols['3XL/TU'] || null;
+  return inv.sizeCols[s] || null;
+}
+
+function locateRentabilite() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_RENT);
+  if (!sheet) throw new Error('Onglet "' + SH_RENT + '" introuvable');
+  var lastRow = sheet.getLastRow(), lastCol = sheet.getLastColumn();
+  var grid = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+
+  var headerRow = -1, cArticle = -1;
+  for (var r = 0; r < Math.min(grid.length, 25); r++) {
+    for (var c = 0; c < grid[r].length; c++) {
+      if (String(grid[r][c]).trim() === LBL_ARTICLE) { headerRow = r; cArticle = c; break; }
+    }
+    if (headerRow >= 0) break;
+  }
+  if (headerRow < 0) throw new Error('Ligne d\'en-tête non trouvée');
+
+  var row = grid[headerRow];
+  var cProduite = findInRow(row, LBL_PRODUITE);
+  var cNormal   = findInRow(row, LBL_NORMAL);
+  var cPref     = findExact(row, LBL_PREF);      // "Préf" seul, pas "PU Préf"
+  var cDon      = findExact(row, LBL_DON);
+  var cPub      = findInRow(row, LBL_PU_PUBLIC);
+  var cPref2    = findInRow(row, LBL_PU_PREF);
+
+  var priceByName = {}, rowByName = {}, articles = [];
+  for (var rr = headerRow + 1; rr < grid.length; rr++) {
+    var name = String(grid[rr][cArticle]).trim();
+    if (name === '') continue;
+    if (/^total/i.test(name)) break;
+    var nkey = norm(name);
+    priceByName[nkey] = {
+      pub:  cPub   ? num(grid[rr][cPub - 1])   : 0,
+      pref: cPref2 ? num(grid[rr][cPref2 - 1]) : 0
+    };
+    rowByName[nkey] = rr + 1;
+    articles.push(name);
+  }
+
+  return {
+    sheet: sheet, headerRow: headerRow + 1, cArticle: cArticle + 1,
+    cProduite: cProduite, cNormal: cNormal, cPref: cPref, cDon: cDon,
+    cPub: cPub, cPref2: cPref2,
+    priceByName: priceByName, rowByName: rowByName, articles: articles
+  };
+}
+
+/* ─── Helpers colonnes ───────────────────────────────────────────────────── */
+function findInRow(row, label) {   // "contient" (insensible casse/espaces)
+  var target = norm(label);
+  for (var i = 0; i < row.length; i++) {
+    if (norm(String(row[i])).indexOf(target) >= 0 && String(row[i]).trim() !== '') return i + 1;
+  }
+  return 0;
+}
+function findExact(row, label) {   // égalité stricte après trim
+  for (var i = 0; i < row.length; i++) {
+    if (String(row[i]).trim() === label) return i + 1;
+  }
+  return 0;
+}
+function columnLetter(n) { var s=''; while(n>0){ var m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=(n-m-1)/26; } return s; }
+
+/* ─── Helpers divers ─────────────────────────────────────────────────────── */
+function categoryOf(name) {
+  var n = norm(name);
+  if (n.indexOf('tote') >= 0)                       return 'tote';
+  if (n.indexOf('pull') >= 0 || n.indexOf('capuche') >= 0 || n.indexOf('hoodie') >= 0 || n.indexOf('sweat') >= 0) return 'pull';
+  return 'tee';
+}
+function slug(name) {
+  return norm(name).replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+function norm(s) {
+  return String(s).toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ').trim();
+}
+function num(v) { var n = Number(v); return isNaN(n) ? 0 : n; }
+function round2(n) { return Math.round(n * 100) / 100; }
+function money(n) { return round2(n).toFixed(2) + ' €'; }
+function countUnits(arts) {
+  var t = 0; String(arts).split(',').forEach(function (p) { var m = p.match(/(\d+)×/); if (m) t += Number(m[1]); }); return t;
+}
 function labelMode(m) {
-  return m === 'cash' ? 'Espèces'
-       : m === 'card' ? 'Carte'
-       : m === 'pref' ? 'Prix préférentiel'
-       : m === 'gift' ? 'Offert'
-       : String(m || '');
+  return m === 'cash' ? 'Espèces' : m === 'card' ? 'Carte'
+       : m === 'pref' ? 'Prix préférentiel' : m === 'gift' ? 'Offert' : String(m || '');
 }
 function labelSettle(settle, method) {
-  var s = settle || (method === 'cash' || method === 'card' ? method : '');
+  var s = settle || ((method === 'cash' || method === 'card') ? method : '');
   return s === 'cash' ? 'Espèces' : s === 'card' ? 'Carte' : '';
 }
-
 function json(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
