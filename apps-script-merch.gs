@@ -14,8 +14,17 @@
  *
  * INSTALLATION
  *  1. Ta Sheet → Extensions → Apps Script → colle tout ce fichier → 💾
- *  2. Lance une fois  verifierStructure()  (menu ▶) : une alerte te dit si le
- *     script retrouve bien tes colonnes. Corrige les libellés si besoin.
+ *  2. Lance une fois  verifierStructure()  (menu ▶).
+ *     ⚠ PIÈGES au 1er lancement :
+ *       – Google demande d'AUTORISER le script : « Paramètres avancés » →
+ *         « Accéder à … (non sécurisé) » → Autoriser. Tant que ce n'est pas
+ *         fait, l'exécution semble tourner en boucle.
+ *       – La fenêtre de résultat s'ouvre DANS L'ONGLET GOOGLE SHEETS (pas dans
+ *         l'éditeur) : tant que tu ne cliques pas OK là-bas, l'éditeur affiche
+ *         « Exécution en cours… ». Le même rapport est aussi écrit dans le
+ *         « Journal d'exécution » en bas de l'éditeur.
+ *     Alternative sans aucune popup :  testSansPopup()  → tout s'affiche dans
+ *     le Journal d'exécution.
  *  3. Déployer → Nouveau déploiement → "Application Web"
  *        Exécuter en tant que : Moi   |   Qui a accès : Tout le monde
  *  4. Copie l'URL /exec → colle-la dans merch.html → SHEETS_WEBHOOK_URL
@@ -73,9 +82,29 @@ function verifierStructure() {
   try { inv2 = getInventory(); msg.push('✅ Carte app : ' + inv2.rows.length + ' ligne(s) taille prêtes pour la caisse.'); }
   catch (e) { msg.push('❌ Carte app : ' + e.message); }
 
-  SpreadsheetApp.getUi().alert('CONTRÔLE STRUCTURE\n\n' + msg.join('\n\n'));
+  var report = 'CONTRÔLE STRUCTURE\n\n' + msg.join('\n\n');
+
+  /* Toujours dans le journal (éditeur → "Journal d'exécution"), lisible sans popup */
+  Logger.log(report);
+
+  /* La popup s'ouvre DANS L'ONGLET GOOGLE SHEETS, pas dans l'éditeur.
+     Si aucune interface n'est disponible, on n'attend pas indéfiniment. */
+  try { SpreadsheetApp.getUi().alert(report); } catch (e) {}
+
+  return report;
 }
 function col(n) { return n ? columnLetter(n) : '—'; }
+
+/** Variante 100% sans popup : lance-la depuis l'éditeur et lis le résultat
+ *  directement dans le "Journal d'exécution" en bas de l'écran. */
+function testSansPopup() {
+  var inv = getInventory();
+  Logger.log('Carte envoyée à l\'app (' + inv.rows.length + ' lignes) :');
+  inv.rows.forEach(function (r) {
+    Logger.log(' - ' + r.name + ' [' + r.size + ']  ' + r.price + '€ / préf ' + r.pricePref + '€  stock ' + r.initial);
+  });
+  return inv.rows.length;
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    LECTURE  (GET depuis l'app)
