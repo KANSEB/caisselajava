@@ -22,6 +22,7 @@
     /* Catégories — couleurs vives et distinctes */
     --c-blonde:  #f5b800;
     --c-blanche: #5ec5ff;
+    --c-abbaye:  #c97a3a;
     --c-ipa:     #ff6b35;
     --c-rouge:   #d63447;
     --c-blanc:   #e8e8d0;
@@ -79,6 +80,7 @@
   /* Couleurs catégories — bordure colorée + nom coloré */
   .c-blonde  { border-color: var(--c-blonde);  } .c-blonde  .prod-name { color: var(--c-blonde); }
   .c-blanche { border-color: var(--c-blanche); } .c-blanche .prod-name { color: var(--c-blanche); }
+  .c-abbaye  { border-color: var(--c-abbaye);  } .c-abbaye  .prod-name { color: var(--c-abbaye); }
   .c-ipa     { border-color: var(--c-ipa);     } .c-ipa     .prod-name { color: var(--c-ipa); }
   .c-rouge   { border-color: var(--c-rouge);   } .c-rouge   .prod-name { color: var(--c-rouge); }
   .c-blanc   { border-color: var(--c-blanc);   } .c-blanc   .prod-name { color: var(--c-blanc); }
@@ -282,27 +284,39 @@ const ADMIN_PIN = '3216';  // PIN fixe partagé sur tous les appareils — pour 
 /* ============================================================ */
 
 const DEFAULTS = [
-  { id:'blonde_d',  name:'Blonde',  sub:'Demi',  price:3.50, cat:'biere', color:'c-blonde'  },
-  { id:'blanche_d', name:'Blanche', sub:'Demi',  price:4.50, cat:'biere', color:'c-blanche' },
-  { id:'ipa_d',     name:'IPA',     sub:'Demi',  price:5.50, cat:'biere', color:'c-ipa'     },
-  { id:'blonde_p',  name:'Blonde',  sub:'Pinte', price:6.00, cat:'biere', color:'c-blonde'  },
-  { id:'blanche_p', name:'Blanche', sub:'Pinte', price:7.00, cat:'biere', color:'c-blanche' },
-  { id:'ipa_p',     name:'IPA',     sub:'Pinte', price:8.00, cat:'biere', color:'c-ipa'     },
-  { id:'rouge_25',  name:'Rouge',   sub:'25cl',  price:5.00, cat:'vin',   color:'c-rouge'   },
-  { id:'blanc_25',  name:'Blanc',   sub:'25cl',  price:5.00, cat:'vin',   color:'c-blanc'   },
-  { id:'rose_25',   name:'Rosé',    sub:'25cl',  price:5.00, cat:'vin',   color:'c-rose'    },
-  { id:'rouge_50',  name:'Rouge',   sub:'50cl',  price:9.00, cat:'vin',   color:'c-rouge'   },
-  { id:'blanc_50',  name:'Blanc',   sub:'50cl',  price:9.00, cat:'vin',   color:'c-blanc'   },
-  { id:'rose_50',   name:'Rosé',    sub:'50cl',  price:9.00, cat:'vin',   color:'c-rose'    },
-  { id:'coca',      name:'Coca',    sub:'',      price:3.00, cat:'soft',  color:'c-soft'    },
-  { id:'jus',       name:'Jus O.',  sub:'',      price:3.00, cat:'soft',  color:'c-soft'    },
-  { id:'icetea',    name:'Ice Tea', sub:'',      price:3.00, cat:'soft',  color:'c-soft'    },
-  { id:'cons',      name:'Écocup',  sub:'Consigne', price:1.00, cat:'cons', color:'c-cons'  },
+  // Bières — Demi 25cl
+  { id:'fresh_d',   name:'Britt Fresh',   sub:'Demi',  price:3.50, cat:'biere', color:'c-blonde'  },
+  { id:'blanche_d', name:'Britt Blanche', sub:'Demi',  price:4.00, cat:'biere', color:'c-blanche' },
+  { id:'abbaye_d',  name:'Abbaye 7%',     sub:'Demi',  price:4.00, cat:'biere', color:'c-abbaye'  },
+  { id:'ipa_d',     name:'IPA 7%',        sub:'Demi',  price:4.50, cat:'biere', color:'c-ipa'     },
+  // Bières — Pinte 50cl
+  { id:'fresh_p',   name:'Britt Fresh',   sub:'Pinte', price:6.00, cat:'biere', color:'c-blonde'  },
+  { id:'blanche_p', name:'Britt Blanche', sub:'Pinte', price:8.00, cat:'biere', color:'c-blanche' },
+  { id:'abbaye_p',  name:'Abbaye 7%',     sub:'Pinte', price:8.00, cat:'biere', color:'c-abbaye'  },
+  { id:'ipa_p',     name:'IPA 7%',        sub:'Pinte', price:9.00, cat:'biere', color:'c-ipa'     },
+  // Vins — 25cl
+  { id:'blanc_25',  name:'Sauvignon',     sub:'25cl',  price:4.00, cat:'vin',   color:'c-blanc'   },
+  { id:'rouge_25',  name:'Merlot',        sub:'25cl',  price:4.00, cat:'vin',   color:'c-rouge'   },
+  { id:'rose_25',   name:'Rosé',          sub:'25cl',  price:4.00, cat:'vin',   color:'c-rose'    },
+  // Vins — 50cl
+  { id:'blanc_50',  name:'Sauvignon',     sub:'50cl',  price:8.00, cat:'vin',   color:'c-blanc'   },
+  { id:'rouge_50',  name:'Merlot',        sub:'50cl',  price:8.00, cat:'vin',   color:'c-rouge'   },
+  { id:'rose_50',   name:'Rosé',          sub:'50cl',  price:8.00, cat:'vin',   color:'c-rose'    },
+  // Softs
+  { id:'pomme',     name:'Pomme',         sub:'Granini', price:3.00, cat:'soft', color:'c-soft'   },
+  { id:'multi',     name:'Multifruit',    sub:'Granini', price:3.00, cat:'soft', color:'c-soft'   },
+  { id:'coca',      name:'Coca',          sub:'1,25L',   price:2.50, cat:'soft', color:'c-soft'   },
+  { id:'fuzetea',   name:'Fuzetea',       sub:'1,25L',   price:2.50, cat:'soft', color:'c-soft'   },
+  { id:'eau',       name:'Cristaline',    sub:'50cl',    price:1.00, cat:'soft', color:'c-soft'   },
+  // Consigne
+  { id:'cons',      name:'Écocup',        sub:'Consigne', price:1.00, cat:'cons', color:'c-cons'  },
 ];
 
+// Bump la clé quand DEFAULTS change pour forcer le rechargement sur tous les appareils
+const PRODUCTS_STORAGE_KEY = 'lj_products_v3';
 
-function loadProducts() { try { const s=localStorage.getItem('lj_products'); return s?JSON.parse(s):JSON.parse(JSON.stringify(DEFAULTS)); } catch { return JSON.parse(JSON.stringify(DEFAULTS)); } }
-function saveProducts() { localStorage.setItem('lj_products', JSON.stringify(products)); }
+function loadProducts() { try { const s=localStorage.getItem(PRODUCTS_STORAGE_KEY); return s?JSON.parse(s):JSON.parse(JSON.stringify(DEFAULTS)); } catch { return JSON.parse(JSON.stringify(DEFAULTS)); } }
+function saveProducts() { localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products)); }
 
 
 let products = loadProducts();
@@ -321,11 +335,11 @@ function renderGrid() {
   document.getElementById('gridWrap').innerHTML = `
     <div class="section">
       <div class="section-title">🍺 Bières — Demi</div>
-      <div class="section-row cols-3">${demis.map(btn).join('')}</div>
+      <div class="section-row cols-2">${demis.map(btn).join('')}</div>
     </div>
     <div class="section">
       <div class="section-title">🍺 Bières — Pinte</div>
-      <div class="section-row cols-3">${pintes.map(btn).join('')}</div>
+      <div class="section-row cols-2">${pintes.map(btn).join('')}</div>
     </div>
     <div class="section">
       <div class="section-title">🍷 Vins — 25cl</div>
