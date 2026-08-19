@@ -82,6 +82,8 @@
   .prod-stock.low { color: var(--warn); border-color: var(--warn); }
   .prod-stock.out { color: var(--danger); border-color: var(--danger); }
   .prod-btn.out { opacity: 0.5; }
+  /* Pastille couleur du vetement (noir, creme, bleu…) */
+  .prod-swatch { position: absolute; top: 8px; left: 8px; width: 17px; height: 17px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.4); box-shadow: 0 0 0 2px rgba(0,0,0,0.35); }
 
   .c-tee   { border-color: var(--c-tee);   } .c-tee   .prod-name { color: var(--c-tee); }
   .c-sweat { border-color: var(--c-sweat); } .c-sweat .prod-name { color: var(--c-sweat); }
@@ -319,6 +321,7 @@
     </div>
     <div class="pay-total" id="payTotal"></div>
     <div class="pay-sub" id="paySub"></div>
+    <button class="btn-secondary" id="btnPrefAdjust" style="display:none;width:100%;margin-bottom:10px;">✎ Ajuster le montant</button>
     <div class="pay-methods">
       <div class="pay-method" data-method="cash"><span class="pay-method-icon">💵</span>Espèces<span class="pm-hint">Prix plein</span></div>
       <div class="pay-method" data-method="card"><span class="pay-method-icon">💳</span>Carte<span class="pm-hint">Prix plein</span></div>
@@ -459,15 +462,30 @@ function renderGrid() {
   });
 }
 
+/* Couleur reelle du vetement, devinee depuis son nom (pour la pastille) */
+function garmentSwatch(name) {
+  const n = name.toLowerCase();
+  if(n.indexOf('bleu nuit') >= 0) return '#1e2a52';
+  if(n.indexOf('bleu')      >= 0) return '#2f6fd8';
+  if(n.indexOf('noir')      >= 0) return '#141414';
+  if(n.indexOf('crème') >= 0 || n.indexOf('creme') >= 0) return '#f2e8cf';
+  if(n.indexOf('blanc')     >= 0) return '#f5f5f5';
+  if(n.indexOf('olive')     >= 0) return '#708238';
+  if(n.indexOf('marron')    >= 0) return '#7b4a2d';
+  if(n.indexOf('vert')      >= 0) return '#2f8f4e';
+  if(n.indexOf('tote')      >= 0) return '#e9dcc0';
+  return null;
+}
+
 function prodBtn(g) {
   const prices   = [...new Set(g.rows.map(r=>r.price))];
   const priceTxt = prices.length===1 ? fmt(prices[0]) : fmt(Math.min.apply(null, prices)) + '+';
   const rest     = g.rows.reduce((s,r)=>s+Math.max(0,remaining(r)),0);
   const cls      = rest<=0 ? 'out' : (rest<=3 ? 'low' : '');
-  const sizes    = g.rows.filter(r=>r.size).map(r=>r.size);
+  const sw       = garmentSwatch(g.name);
   return '<button class="prod-btn ' + g.color + ' ' + (rest<=0?'out':'') + '" data-pid="' + g.id + '">'
+    + (sw ? '<span class="prod-swatch" style="background:' + sw + '"></span>' : '')
     + '<span class="prod-name">' + g.name + '</span>'
-    + (sizes.length ? '<span class="prod-sub">' + sizes.join(' · ') + '</span>' : '')
     + '<span class="prod-price">' + priceTxt + '</span>'
     + '<span class="prod-stock ' + cls + '">' + (rest>0 ? 'reste ' + rest : 'épuisé') + '</span>'
     + '</button>';
@@ -478,6 +496,21 @@ function onProductClick(pid, btnEl) {
   if(!rows.length) return;
   if(rows.length===1) { addRow(rows[0], btnEl); return; }   // une seule ligne (ex tote TU) → direct
   openSizePicker(rows);
+}
+
+/* Met a jour uniquement les badges "reste X" sans reconstruire la grille
+   (reconstruire tout a chaque article ajoute faisait ramer les telephones). */
+function updateStockBadges() {
+  document.querySelectorAll('.prod-btn[data-pid]').forEach(function(b){
+    const rows = catalog.filter(r=>r.id===b.dataset.pid);
+    const rest = rows.reduce((s,r)=>s+Math.max(0,remaining(r)),0);
+    const el = b.querySelector('.prod-stock');
+    if(el) {
+      el.textContent = rest>0 ? 'reste ' + rest : 'épuisé';
+      el.className = 'prod-stock ' + (rest<=0 ? 'out' : (rest<=3 ? 'low' : ''));
+    }
+    b.classList.toggle('out', rest<=0);
+  });
 }
 
 /* ===== Selecteur de taille ===== */
@@ -509,7 +542,7 @@ function addRow(r, btnEl) {
   else cart.push({ key:k, id:r.id, name:r.name, size:r.size||'', price:r.price, pricePref:(r.pricePref!=null?r.pricePref:r.price), qty:1, type:'item' });
   vibrate(15);
   if(btnEl) { const f=document.createElement('div'); f.className='float-plus'; f.textContent='+1'; btnEl.appendChild(f); setTimeout(()=>f.remove(),600); }
-  renderCart(); renderGrid();
+  renderCart(); updateStockBadges();
 }
 
 function askDon() {
@@ -527,10 +560,10 @@ function removeLast() {
   const last = cart[cart.length-1];
   last.qty--;
   if(last.qty<=0) cart.pop();
-  renderCart(); renderGrid();
+  renderCart(); updateStockBadges();
 }
-function removeItem(key) { vibrate(20); cart = cart.filter(i=>i.key!==key); renderCart(); renderGrid(); }
-function clearCart()     { if(!cart.length) return; vibrate([20,40,20]); cart=[]; renderCart(); renderGrid(); }
+function removeItem(key) { vibrate(20); cart = cart.filter(i=>i.key!==key); renderCart(); updateStockBadges(); }
+function clearCart()     { if(!cart.length) return; vibrate([20,40,20]); cart=[]; renderCart(); updateStockBadges(); }
 function total()         { return cart.reduce((s,i)=>s+i.price*i.qty,0); }
 /* Total au tarif preferentiel officiel (PU Pref du doc) ; un don libre garde sa valeur */
 function prefTotal()     { return cart.reduce((s,i)=>s + (i.type==='don' ? i.price : (i.pricePref!=null?i.pricePref:i.price)) * i.qty, 0); }
@@ -589,8 +622,9 @@ let payMethod = null;
 function openPay() {
   if(!cart.length) return;
   payMethod = null;
-  document.getElementById('payTotal').textContent = fmt(total());
+  setPayAmountDisplay(total(), null);
   document.getElementById('paySub').textContent = '';
+  document.getElementById('btnPrefAdjust').style.display = 'none';
   document.getElementById('btnConfirm').classList.remove('show');
   document.querySelectorAll('.pay-method').forEach(m=>m.classList.remove('selected'));
   document.getElementById('payModal').classList.add('open');
@@ -602,40 +636,55 @@ function markSelected(m) {
   if(el) el.classList.add('selected');
 }
 
+/* Affiche le montant a encaisser ; si different du prix plein, le plein apparait barre */
+function setPayAmountDisplay(amount, fullIfDifferent) {
+  const el = document.getElementById('payTotal');
+  if(fullIfDifferent!=null && fullIfDifferent!==amount) {
+    el.innerHTML = fmt(amount) + ' <small style="font-size:20px;color:var(--muted);text-decoration:line-through;font-weight:700;">' + fmt(fullIfDifferent) + '</small>';
+  } else {
+    el.textContent = fmt(amount);
+  }
+}
+
 function selectMethod(m) {
   vibrate(15);
   const sub = document.getElementById('paySub');
+  const adjust = document.getElementById('btnPrefAdjust');
 
   if(m==='pref') {
+    /* Le montant bascule immediatement sur le tarif pref officiel du doc */
     markSelected('pref');
-    const suggested = prefTotal();
-    openAmountPad('Prix préférentiel', 'Prix plein : ' + fmt(total()) + ' — tarif préf proposé ' + fmt(suggested) + ' (modifiable)', suggested, function(v){
-      payMethod = { kind:'pref', amount:v, settle:null };
-      markSelected('pref');
-      sub.innerHTML = 'Tarif préférentiel : <b style="color:var(--accent)">' + fmt(v) + '</b> — remise ' + fmt(Math.max(0,total()-v))
-        + '<br><small>Choisis maintenant Espèces ou Carte pour le règlement</small>';
-      document.getElementById('btnConfirm').classList.remove('show');
-    });
+    payMethod = { kind:'pref', amount:prefTotal(), settle:null };
+    setPayAmountDisplay(payMethod.amount, total());
+    sub.innerHTML = 'Tarif préférentiel appliqué — remise <b style="color:var(--accent)">' + fmt(Math.max(0,total()-payMethod.amount)) + '</b>'
+      + '<br><small>Choisis Espèces ou Carte pour le règlement</small>';
+    adjust.style.display = 'block';
+    document.getElementById('btnConfirm').classList.remove('show');
     return;
   }
 
   if(m==='gift') {
     markSelected('gift');
     payMethod = { kind:'gift', amount:0, settle:'' };
-    sub.innerHTML = 'Offert / don en nature — <b style="color:var(--warn)">0,00 €</b> encaissé, sorti du stock';
+    setPayAmountDisplay(0, total());
+    sub.innerHTML = 'Offert / don en nature — rien encaissé, sorti du stock';
+    adjust.style.display = 'none';
     document.getElementById('btnConfirm').classList.add('show');
     return;
   }
 
-  /* cash | card : soit reglement plein, soit reglement d'un tarif preferentiel deja saisi */
+  /* cash | card : soit reglement plein, soit reglement d'un tarif preferentiel deja choisi */
   if(payMethod && payMethod.kind==='pref') {
     payMethod.settle = m;
     markSelected('pref');
+    document.querySelector('.pay-method[data-method="' + m + '"]').classList.add('selected');
     sub.innerHTML = 'Tarif préférentiel <b style="color:var(--accent)">' + fmt(payMethod.amount) + '</b> réglé en <b>'
       + (m==='cash' ? 'espèces' : 'carte') + '</b>';
   } else {
     markSelected(m);
     payMethod = { kind:m, amount:total(), settle:m };
+    setPayAmountDisplay(total(), null);
+    adjust.style.display = 'none';
     sub.textContent = m==='cash' ? 'Règlement en espèces, prix plein' : 'Règlement par carte, prix plein';
   }
   document.getElementById('btnConfirm').classList.add('show');
@@ -660,7 +709,7 @@ function confirmPay() {
     'ENCAISSÉ ' + fmt(pm.amount);
   const f = document.getElementById('flash');
   f.classList.add('show'); vibrate([30,60,30]);
-  setTimeout(()=>{ f.classList.remove('show'); payMethod=null; cart=[]; renderCart(); renderGrid(); }, 900);
+  setTimeout(()=>{ f.classList.remove('show'); payMethod=null; cart=[]; renderCart(); updateStockBadges(); }, 900);
 }
 
 /* ===== Sync Google Sheets ===== */
@@ -951,6 +1000,15 @@ document.getElementById('btnResetLocal').addEventListener('click', ()=>{
 
 document.querySelectorAll('.pay-method').forEach(m=>m.addEventListener('click', ()=>selectMethod(m.dataset.method)));
 document.getElementById('btnConfirm').addEventListener('click', confirmPay);
+document.getElementById('btnPrefAdjust').addEventListener('click', ()=>{
+  if(!payMethod || payMethod.kind!=='pref') return;
+  openAmountPad('Ajuster le tarif préf', 'Tarif préf du doc : ' + fmt(prefTotal()) + ' — prix plein : ' + fmt(total()), payMethod.amount, function(v){
+    payMethod.amount = v;
+    setPayAmountDisplay(v, total());
+    document.getElementById('paySub').innerHTML = 'Tarif ajusté : <b style="color:var(--accent)">' + fmt(v) + '</b> — remise ' + fmt(Math.max(0,total()-v))
+      + '<br><small>Choisis Espèces ou Carte pour le règlement</small>';
+  });
+});
 </script>
 </body>
 </html>
