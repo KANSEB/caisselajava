@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/merch", "destination": "/merch.html" },
+    { "source": "/bar", "destination": "/index.html" }
+  ]
+}

@@ -54,7 +54,7 @@ var LBL_PU_PUBLIC = 'PU Public';
 var LBL_PU_PREF   = 'PU Préf';
 
 var SALES_HEADERS = ['Horodatage', 'Mode', 'Règlement', 'Montant encaissé',
-                     'Prix plein', 'Remise', 'Don libre', 'Articles', 'Appareil'];
+                     'Prix plein', 'Remise', 'Don libre', 'Articles', 'Vendeur', 'Appareil', 'JSON'];
 
 /* ══════════════════════════════════════════════════════════════════════════
    OUTIL DE CONTRÔLE — lance-le une fois après avoir collé le script
@@ -112,7 +112,93 @@ function testSansPopup() {
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || 'stats';
   if (action === 'inventory') return json(getInventory());
+  if (action === 'history')   return json(getHistory());
+  if (action === 'deleteSale') return json(deleteSale(e.parameter));
   return json(getStats());
+}
+
+/** Journal des encaissements, du plus recent au plus ancien (50 max). */
+function getHistory() {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_SALES);
+  if (!sh || sh.getLastRow() < 2) return { rows: [] };
+  var last = sh.getLastRow();
+  var first = Math.max(2, last - 49);
+  var data = sh.getRange(first, 1, last - first + 1, SALES_HEADERS.length).getValues();
+  var rows = [];
+  for (var i = data.length - 1; i >= 0; i--) {
+    var v = data[i];
+    rows.push({
+      row: first + i,
+      ts: v[0] instanceof Date ? v[0].toISOString() : String(v[0]),
+      mode: String(v[1] || ''), settle: String(v[2] || ''),
+      amount: num(v[3]), full: num(v[4]), discount: num(v[5]), don: num(v[6]),
+      articles: String(v[7] || ''), vendor: String(v[8] || ''), device: String(v[9] || ''),
+      hasJson: !!String(v[10] || '')
+    });
+  }
+  return { rows: rows, total: last - 1 };
+}
+
+/**
+ * Annule un encaissement : restitue le stock (Inventaire) et les compteurs
+ * (Rentabilité) grâce au JSON stocké, puis supprime la ligne du journal.
+ * Sécurité : l'horodatage passé doit correspondre à celui de la ligne visée.
+ */
+function deleteSale(p) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (err) { return { ok: false, error: 'lock' }; }
+  try {
+    var row = parseInt(p.row, 10);
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH_SALES);
+    if (!sh || isNaN(row) || row < 2 || row > sh.getLastRow()) return { ok: false, error: 'ligne introuvable' };
+
+    var v = sh.getRange(row, 1, 1, SALES_HEADERS.length).getValues()[0];
+    var ts = v[0] instanceof Date ? v[0].toISOString() : String(v[0]);
+    if (p.ts && ts !== p.ts) return { ok: false, error: 'ligne modifiée entre-temps — recharge l\'historique' };
+
+    var reversed = false;
+    var jsonStr = String(v[10] || '');
+    if (jsonStr) {
+      try {
+        var sale = JSON.parse(jsonStr);
+        reverseSale(sale);
+        reversed = true;
+      } catch (err) {}
+    }
+    sh.deleteRow(row);
+    return { ok: true, reversed: reversed };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Inverse de applyToSheet : re-crédite le stock, décrémente les compteurs. */
+function reverseSale(sale) {
+  var items = (sale.items || []).filter(function (it) { return it.type !== 'don'; });
+  if (!items.length) return;
+  var inv  = locateInventory();
+  var rent = locateRentabilite();
+  var counterCol = sale.method === 'gift' ? rent.cDon
+                 : sale.method === 'pref' ? rent.cPref
+                 : rent.cNormal;
+  items.forEach(function (it) {
+    var nkey = norm(it.name);
+    var artRow = inv.rowByName[nkey];
+    if (artRow) {
+      var sizeCol = resolveSizeCol(inv, it.size, categoryOf(it.name));
+      if (sizeCol) {
+        var cell = inv.sheet.getRange(artRow, sizeCol);
+        cell.setValue(num(cell.getValue()) + num(it.qty));
+      }
+    }
+    var rRow = rent.rowByName[nkey];
+    if (rRow && counterCol) {
+      var c = rent.sheet.getRange(rRow, counterCol);
+      c.setValue(Math.max(0, num(c.getValue()) - num(it.qty)));
+    }
+  });
 }
 
 /** Carte + stock par taille + prix, prête pour la grille de l'app. */
@@ -191,6 +277,10 @@ function journalize(sale) {
     sh.getRange(1, 1, 1, SALES_HEADERS.length).setValues([SALES_HEADERS])
       .setFontWeight('bold').setBackground('#f0f0f0');
     sh.setFrozenRows(1);
+  } else if (String(sh.getRange(1, 9).getValue()) !== SALES_HEADERS[8]) {
+    /* migration : ancien journal sans colonnes Vendeur / JSON */
+    sh.getRange(1, 1, 1, SALES_HEADERS.length).setValues([SALES_HEADERS])
+      .setFontWeight('bold').setBackground('#f0f0f0');
   }
   var items = sale.items || [];
   var don = 0, arts = [];
@@ -202,7 +292,8 @@ function journalize(sale) {
     new Date(sale.ts || new Date()),
     labelMode(sale.method), labelSettle(sale.settle, sale.method),
     num(sale.amount), num(sale.fullPrice), num(sale.discount),
-    don, arts.join(', '), sale.deviceId || ''
+    don, arts.join(', '), sale.vendor || '', sale.deviceId || '',
+    JSON.stringify({ method: sale.method, items: sale.items || [] })
   ]);
 }
 
