@@ -68,6 +68,8 @@
   .p-eur { display: block; font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .p-bene { display: block; font-size: 11px; font-weight: 500; color: var(--faint); }
   .list-empty { text-align: center; color: var(--faint); font-size: 14px; font-style: italic; padding: 30px 10px; }
+  .brand-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); padding: 6px 2px 0; }
+  .brand-title:first-child { padding-top: 0; }
 
   .float-plus { position: absolute; top: 8px; right: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 900; font-size: 14px; padding: 2px 8px; border-radius: 12px; animation: floatup 0.6s ease-out forwards; pointer-events: none; }
   @keyframes floatup { 0%{opacity:0;transform:translateY(0) scale(.5)} 30%{opacity:1;transform:translateY(-8px) scale(1.1)} 100%{opacity:0;transform:translateY(-26px) scale(1)} }
@@ -507,7 +509,8 @@ function displayParts(name) {
   const title = right ? (type + ' ' + right.toLowerCase()) : type;
   const sub = [brand, season].filter(Boolean).join(' · ');
   const colorWord = right || type;
-  return { title: title, sub: sub, colorWord: colorWord };
+  const brandKey = brand.indexOf('DLZ') === 0 ? 'DLZ' : brand;   // regroupe DLZ 2025/2026 sous "DLZ"
+  return { title: title, sub: sub, colorWord: colorWord, brand: brand, brandKey: brandKey };
 }
 
 /* ===== Liste produits ===== */
@@ -537,27 +540,21 @@ function renderList() {
       +   '<span class="p-price"><span class="p-eur">＋</span></span>'
       + '</span></button>'
     : '';
-  wrap.innerHTML = groups.map(g => {
-    const p = displayParts(g.name);
-    const c = garmentColors(g.name);
-    const prices = [...new Set(g.rows.map(r=>r.price))];
-    const prefs  = [...new Set(g.rows.map(r=>r.pricePref))];
-    const rest = g.rows.reduce((s,r)=>s+Math.max(0,remaining(r)),0);
-    const restCls = rest<=0 ? 'out' : (rest<=3 ? 'low' : '');
-    const restTxt = rest<=0 ? 'épuisé' : 'reste ' + rest;
-    return '<button class="p-row' + (rest<=0?' out':'') + '" data-pid="' + g.id + '">'
-      + '<span class="p-bar" style="background:' + (c.bar||c.edge) + '"></span>'
-      + '<span class="p-main">'
-      +   '<span class="p-dot" style="background:' + c.fill + ';border-color:' + c.edge + '"></span>'
-      +   '<span class="p-txt">'
-      +     '<span class="p-name">' + p.title + '</span>'
-      +     '<span class="p-sub">' + p.sub + ' · <span class="' + restCls + '" data-rest="' + g.id + '">' + restTxt + '</span></span>'
-      +   '</span>'
-      +   '<span class="p-price">'
-      +     '<span class="p-eur">' + fmtShort(prices.length===1?prices[0]:Math.min.apply(null,prices)) + (prices.length>1?'+':'') + '</span>'
-      +     (prefs[0] ? '<span class="p-bene">béné ' + fmtShort(prefs.length===1?prefs[0]:Math.min.apply(null,prefs)) + '</span>' : '')
-      +   '</span>'
-      + '</span></button>';
+  /* Sections par marque : La Java d'abord, puis DLZ, puis le reste */
+  const brandOrder = [];
+  groups.forEach(g => {
+    const bk = displayParts(g.name).brandKey;
+    if(brandOrder.indexOf(bk) < 0) brandOrder.push(bk);
+  });
+  brandOrder.sort(function(a,b){
+    const rank = k => k==='La Java' ? 0 : (k==='DLZ' ? 1 : 2);
+    return rank(a) - rank(b);
+  });
+
+  wrap.innerHTML = brandOrder.map(bk => {
+    const items = groups.filter(g => displayParts(g.name).brandKey === bk);
+    return '<div class="brand-title">' + bk.toUpperCase() + '</div>'
+      + items.map(prodRow).join('');
   }).join('') + donRow;
   wrap.querySelectorAll('.p-row[data-pid]').forEach(b=>b.addEventListener('click', ()=>onProductClick(b.dataset.pid, b)));
   const dr = document.getElementById('donRow');
@@ -569,6 +566,30 @@ function renderList() {
       vibrate(15); renderFooter();
     });
   });
+}
+
+function prodRow(g) {
+  const p = displayParts(g.name);
+  const c = garmentColors(g.name);
+  const prices = [...new Set(g.rows.map(r=>r.price))];
+  const prefs  = [...new Set(g.rows.map(r=>r.pricePref))];
+  const rest = g.rows.reduce((s,r)=>s+Math.max(0,remaining(r)),0);
+  const restCls = rest<=0 ? 'out' : (rest<=3 ? 'low' : '');
+  const restTxt = rest<=0 ? 'épuisé' : 'reste ' + rest;
+  const sub = [p.brand !== p.brandKey ? p.brand : '', p.sub.split(' · ').slice(1).join(' · ')].filter(Boolean).join(' · ');
+  return '<button class="p-row' + (rest<=0?' out':'') + '" data-pid="' + g.id + '">'
+    + '<span class="p-bar" style="background:' + (c.bar||c.edge) + '"></span>'
+    + '<span class="p-main">'
+    +   '<span class="p-dot" style="background:' + c.fill + ';border-color:' + c.edge + '"></span>'
+    +   '<span class="p-txt">'
+    +     '<span class="p-name">' + p.title + '</span>'
+    +     '<span class="p-sub">' + (sub ? sub + ' · ' : '') + '<span class="' + restCls + '" data-rest="' + g.id + '">' + restTxt + '</span></span>'
+    +   '</span>'
+    +   '<span class="p-price">'
+    +     '<span class="p-eur">' + fmtShort(prices.length===1?prices[0]:Math.min.apply(null,prices)) + (prices.length>1?'+':'') + '</span>'
+    +     (prefs[0] ? '<span class="p-bene">béné ' + fmtShort(prefs.length===1?prefs[0]:Math.min.apply(null,prefs)) + '</span>' : '')
+    +   '</span>'
+    + '</span></button>';
 }
 
 /* Mise a jour legere des "reste X" sans reconstruire la liste */
