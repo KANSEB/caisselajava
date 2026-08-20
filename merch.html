@@ -349,7 +349,7 @@
   </div>
 </div>
 
-<!-- SHEET Montant (don / ajustement) -->
+<!-- SHEET Montant (ajustement tarif) -->
 <div class="sheet-overlay" id="amountModal">
   <div class="sheet">
     <div class="sheet-head"><div class="sheet-title" id="amountTitle">Montant</div><button class="btn-x" id="closeAmount">✕</button></div>
@@ -464,7 +464,6 @@ function saveSold() { localStorage.setItem(K_SOLD, JSON.stringify(sold)); }
 let catalog = loadCatalog();
 let sold    = loadSold();     // { "id|taille": nb sorti du stock }
 let cart    = [];
-let donSeq  = 0;
 let filterCat = 'all';
 let filterTxt = '';
 
@@ -531,15 +530,6 @@ function renderList() {
   });
   const wrap = document.getElementById('listWrap');
   if(!groups.length) { wrap.innerHTML = '<div class="list-empty">Aucun produit ne correspond</div>'; return; }
-  const donRow = (filterCat==='all' && !filterTxt)
-    ? '<button class="p-row" id="donRow" style="border-color:#4a3d1f;">'
-      + '<span class="p-bar" style="background:#ffd166"></span>'
-      + '<span class="p-main">'
-      +   '<span class="p-dot" style="background:#2a2416;border-color:#ffd166;display:flex;align-items:center;justify-content:center;font-size:18px;">💛</span>'
-      +   '<span class="p-txt"><span class="p-name">Don libre</span><span class="p-sub">Un montant, sans article</span></span>'
-      +   '<span class="p-price"><span class="p-eur">＋</span></span>'
-      + '</span></button>'
-    : '';
   /* Sections par marque : La Java d'abord, puis DLZ, puis le reste */
   const brandOrder = [];
   groups.forEach(g => {
@@ -555,17 +545,8 @@ function renderList() {
     const items = groups.filter(g => displayParts(g.name).brandKey === bk);
     return '<div class="brand-title">' + bk.toUpperCase() + '</div>'
       + items.map(prodRow).join('');
-  }).join('') + donRow;
+  }).join('');
   wrap.querySelectorAll('.p-row[data-pid]').forEach(b=>b.addEventListener('click', ()=>onProductClick(b.dataset.pid, b)));
-  const dr = document.getElementById('donRow');
-  if(dr) dr.addEventListener('click', ()=>{
-    openAmountPad('Don libre', 'Montant donné par la personne', 0, function(v){
-      if(v<=0) return;
-      donSeq++;
-      cart.push({ key:'don_'+donSeq, id:'don', name:'Don', size:'', price:v, qty:1, type:'don' });
-      vibrate(15); renderFooter();
-    });
-  });
 }
 
 function prodRow(g) {
@@ -669,11 +650,10 @@ function removeLast() {
 function removeItem(key) { vibrate(20); cart = cart.filter(i=>i.key!==key); renderFooter(); updateStockLabels(); renderTicket(); }
 function clearCart()     { if(!cart.length) return; vibrate([20,40,20]); cart=[]; renderFooter(); updateStockLabels(); renderTicket(); }
 function total()         { return cart.reduce((s,i)=>s+i.price*i.qty,0); }
-function prefTotal()     { return cart.reduce((s,i)=>s + (i.type==='don' ? i.price : (i.pricePref!=null?i.pricePref:i.price)) * i.qty, 0); }
+function prefTotal()     { return cart.reduce((s,i)=>s + (i.pricePref!=null?i.pricePref:i.price) * i.qty, 0); }
 function cartUnits()     { return cart.reduce((s,i)=>s+i.qty,0); }
 
 function shortLabel(i) {
-  if(i.type==='don') return 'Don ' + fmtShort(i.price);
   const p = displayParts(i.name);
   let w = p.colorWord || p.title;
   w = w.replace(/\s*\([^)]*\)/,'').trim();
@@ -697,7 +677,7 @@ function renderTicket() {
   if(!cart.length) { el.innerHTML = '<div class="list-empty" style="padding:16px">Ticket vide</div>'; return; }
   el.innerHTML = cart.map(i=>
     '<div class="tk-item">'
-    + '<span class="tk-name">' + (i.type==='don' ? 'Don libre' : displayParts(i.name).title) + (i.size?' <small>· '+i.size+'</small>':'') + '</span>'
+    + '<span class="tk-name">' + displayParts(i.name).title + (i.size?' <small>· '+i.size+'</small>':'') + '</span>'
     + '<span class="tk-qty">' + i.qty + '</span>'
     + '<span class="tk-line">' + fmt(i.price*i.qty) + '</span>'
     + '<button class="tk-del" data-key="' + i.key + '">✕</button>'
@@ -754,7 +734,7 @@ function payAmount() {
 function renderRecap() {
   document.getElementById('payRecap').innerHTML = cart.map(i=>
     '<div class="recap-line">'
-    + '<span class="n">' + (i.type==='don' ? 'Don libre' : displayParts(i.name).title) + (i.size ? ' · ' + i.size : '') + '</span>'
+    + '<span class="n">' + displayParts(i.name).title + (i.size ? ' · ' + i.size : '') + '</span>'
     + '<span class="q">×' + i.qty + '</span>'
     + '<span class="p">' + fmt(i.price*i.qty) + '</span>'
     + '</div>').join('')
@@ -818,8 +798,8 @@ function confirmPay() {
   const items = JSON.parse(JSON.stringify(cart));
   recordSale(pm, full, items);
 
-  /* Decrement du stock local (les dons libres ne consomment pas de stock) */
-  items.filter(i=>i.type==='item').forEach(i=>{ sold[i.key] = soldOf(i.key) + i.qty; });
+  /* Decrement du stock local */
+  items.forEach(i=>{ sold[i.key] = soldOf(i.key) + i.qty; });
   saveSold();
 
   document.getElementById('payScreen').classList.remove('open');
@@ -958,7 +938,6 @@ async function fetchGlobalStats() {
     + statRow('💳 Carte', '(' + (d.countCard||0) + ')', fmt(card) + ' <small style="color:var(--text-dim);font-size:13px;">' + pct(card) + '%</small>', '')
     + statRow('🏷️ Tarif préf.', '(' + (d.countPref||0) + ' ventes)', '−' + fmt(d.discount||0) + ' de remise', 'soft')
     + statRow('🎁 Offert', '(' + (d.countGift||0) + ' ventes)', (d.giftedUnits||0) + ' art. — ' + fmt(d.giftedValue||0), 'soft')
-    + statRow('💛 Dons libres', '(' + (d.countDon||0) + ')', fmt(d.donAmount||0), 'soft')
     + statRow('TOTAL ENCAISSÉ', '', fmt(enc), 'total');
   } catch(e) {
     el.innerHTML = '<div style="color:var(--danger);text-align:center;padding:10px;font-size:13px;">⚠ Erreur de chargement<br><small style="color:var(--muted);">' + e.message + '</small></div>';
