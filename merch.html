@@ -110,21 +110,37 @@
   .sz-add { width: 100%; padding: 18px; border-radius: 12px; border: none; background: var(--accent); color: var(--accent-ink); font-size: 18px; font-weight: 900; }
   .sz-add:disabled { opacity: .35; }
 
-  /* ENCAISSEMENT (2b) */
-  .pay-hero { padding: 22px 16px 0; text-align: center; flex-shrink: 0; }
-  .pay-mode { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .6px; text-transform: uppercase; }
-  .pay-amount { font-size: 64px; font-weight: 700; color: var(--accent); line-height: 1.05; font-variant-numeric: tabular-nums; margin-top: 6px; }
-  .pay-note { font-size: 13px; font-weight: 500; color: var(--muted); min-height: 20px; margin-top: 4px; }
-  .pay-note .adj { color: var(--accent); font-weight: 700; text-decoration: underline; }
-  .pay-rows { padding: 22px 14px 0; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
-  .pay-row { position: relative; display: flex; align-items: center; gap: 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 14px; padding: 22px 18px; text-align: left; color: var(--text); }
-  .pay-row .ic { font-size: 30px; }
-  .pay-row .lb { flex: 1; font-size: 20px; font-weight: 700; }
-  .pay-row.sel::after { content:''; position: absolute; inset: -1px; border: 2px solid var(--accent); border-radius: 14px; background: rgba(160,107,255,.10); }
-  .pay-other { margin: 16px 14px 0; width: calc(100% - 28px); background: none; border: 1px solid var(--border); border-radius: 12px; padding: 14px; color: #9a9a9a; font-size: 13.5px; font-weight: 600; flex-shrink: 0; }
+  /* ENCAISSEMENT (2a : deux questions) */
+  .pay-recap { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .recap-line { display: flex; font-size: 14px; font-weight: 500; }
+  .recap-line .n { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .recap-line .q { color: var(--muted); width: 34px; flex-shrink: 0; }
+  .recap-line .p { width: 76px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .recap-total { display: flex; font-size: 14px; font-weight: 700; border-top: 1px solid var(--border); padding-top: 8px; }
+  .recap-total .n { flex: 1; color: var(--muted); font-weight: 500; }
+  .recap-total .p { width: 76px; text-align: right; font-variant-numeric: tabular-nums; }
+  .pay-q { display: flex; align-items: baseline; gap: 8px; padding: 18px 14px 10px; flex-shrink: 0; }
+  .pay-q .qn { width: 20px; height: 20px; border-radius: 50%; background: var(--border); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; align-self: center; }
+  .pay-q .qt { font-size: 15px; font-weight: 600; }
+  .price-rows { padding: 0 14px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+  .price-row { position: relative; display: flex; align-items: center; gap: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 15px 14px; text-align: left; color: var(--text); }
+  .price-row .t { flex: 1; font-size: 15px; font-weight: 600; }
+  .price-row .t small { display: block; font-size: 11.5px; font-weight: 500; color: var(--muted); margin-top: 1px; }
+  .price-row .t small .adj { color: var(--accent); font-weight: 700; text-decoration: underline; }
+  .price-row .a { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .price-row.sel::after { content:''; position: absolute; inset: -1px; border: 2px solid var(--accent); border-radius: 12px; background: rgba(160,107,255,.10); pointer-events: none; }
+  .settle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .settle-btn { position: relative; background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 18px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--text); }
+  .settle-btn .ic { font-size: 24px; }
+  .settle-btn span:last-child { font-size: 15px; font-weight: 600; }
+  .settle-btn.sel::after { content:''; position: absolute; inset: -1px; border: 2px solid var(--accent); border-radius: 12px; background: rgba(160,107,255,.10); pointer-events: none; }
+  .settle-skip { background: var(--surface2); border: 1px dashed var(--border); border-radius: 12px; padding: 16px; text-align: center; font-size: 13.5px; font-weight: 500; color: var(--muted); }
   .pay-foot { padding: 14px; flex-shrink: 0; background: var(--surface); border-top: 1px solid var(--border); margin-top: auto; }
+  .pay-foot-row { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 10px; }
+  .pay-foot-row .k { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .4px; }
+  .pay-foot-row .v { font-size: 40px; font-weight: 700; color: var(--accent); line-height: 1; font-variant-numeric: tabular-nums; }
   .pay-cta { width: 100%; padding: 18px; border-radius: 12px; border: none; background: var(--accent); color: var(--accent-ink); font-size: 18px; font-weight: 700; }
-  .pay-cta:disabled { opacity: .35; }
+  .pay-cta.hint { opacity: .85; }
 
   /* SHEETS (autre cas / ticket / montant / pin) */
   .sheet-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.72); z-index: 200; display: none; align-items: flex-end; }
@@ -286,35 +302,36 @@
   </div>
 </div>
 
-<!-- ENCAISSEMENT plein écran (2b) -->
+<!-- ENCAISSEMENT plein écran (2a : deux questions) -->
 <div class="screen" id="payScreen">
   <div class="screen-head">
     <div class="screen-title">Encaissement</div>
     <button class="btn-x" id="payClose">✕</button>
   </div>
-  <div class="pay-hero">
-    <div class="pay-mode" id="payMode"></div>
-    <div class="pay-amount" id="payAmountEl">0,00 €</div>
-    <div class="pay-note" id="payNote"></div>
-  </div>
-  <div class="pay-rows">
-    <button class="pay-row" id="rowCash"><span class="ic">💵</span><span class="lb">Espèces</span></button>
-    <button class="pay-row" id="rowCard"><span class="ic">💳</span><span class="lb">Carte</span></button>
-  </div>
-  <button class="pay-other" id="btnOther">Autre cas — tarif bénévole, offert, don</button>
-  <div class="pay-foot">
-    <button class="pay-cta" id="btnConfirm" disabled>ENCAISSER</button>
-  </div>
-</div>
 
-<!-- SHEET Autre cas -->
-<div class="sheet-overlay" id="otherSheet">
-  <div class="sheet">
-    <div class="sheet-head"><div class="sheet-title">Autre cas</div><button class="btn-x" id="otherClose">✕</button></div>
-    <button class="opt-row" id="optPref"><span class="t">Tarif bénévole<small id="optPrefSub"></small></span></button>
-    <button class="opt-row" id="optGift"><span class="t">Offert<small>0,00 €, sorti du stock</small></span></button>
-    <button class="opt-row" id="optDon"><span class="t">Don libre<small>saisir un montant, sans article</small></span></button>
-    <button class="opt-row" id="optFull" style="display:none"><span class="t">Revenir au prix public<small id="optFullSub"></small></span></button>
+  <div style="padding:14px 14px 0;flex-shrink:0">
+    <div class="pay-recap" id="payRecap"></div>
+  </div>
+
+  <div class="pay-q"><span class="qn">1</span><span class="qt">Quel prix&nbsp;?</span></div>
+  <div class="price-rows">
+    <button class="price-row" id="prFull"><span class="t">Prix public</span><span class="a" id="prFullAmt"></span></button>
+    <button class="price-row" id="prPref"><span class="t">Tarif bénévole<small id="prPrefSub"></small></span><span class="a" id="prPrefAmt"></span></button>
+    <button class="price-row" id="prGift"><span class="t">Offert<small>sorti du stock, rien à encaisser</small></span><span class="a">0,00 €</span></button>
+  </div>
+
+  <div class="pay-q"><span class="qn">2</span><span class="qt">Payé comment&nbsp;?</span></div>
+  <div style="padding:0 14px;flex-shrink:0">
+    <div class="settle-grid" id="settleGrid">
+      <button class="settle-btn" id="stCash"><span class="ic">💵</span><span>Espèces</span></button>
+      <button class="settle-btn" id="stCard"><span class="ic">💳</span><span>Carte</span></button>
+    </div>
+    <div class="settle-skip" id="settleSkip" style="display:none">Rien à encaisser — étape sautée</div>
+  </div>
+
+  <div class="pay-foot">
+    <div class="pay-foot-row"><span class="k">À encaisser</span><span class="v" id="payAmountEl">0,00 €</span></div>
+    <button class="pay-cta" id="btnConfirm">Choisis espèces ou carte</button>
   </div>
 </div>
 
@@ -511,6 +528,15 @@ function renderList() {
   });
   const wrap = document.getElementById('listWrap');
   if(!groups.length) { wrap.innerHTML = '<div class="list-empty">Aucun produit ne correspond</div>'; return; }
+  const donRow = (filterCat==='all' && !filterTxt)
+    ? '<button class="p-row" id="donRow" style="border-color:#4a3d1f;">'
+      + '<span class="p-bar" style="background:#ffd166"></span>'
+      + '<span class="p-main">'
+      +   '<span class="p-dot" style="background:#2a2416;border-color:#ffd166;display:flex;align-items:center;justify-content:center;font-size:18px;">💛</span>'
+      +   '<span class="p-txt"><span class="p-name">Don libre</span><span class="p-sub">Un montant, sans article</span></span>'
+      +   '<span class="p-price"><span class="p-eur">＋</span></span>'
+      + '</span></button>'
+    : '';
   wrap.innerHTML = groups.map(g => {
     const p = displayParts(g.name);
     const c = garmentColors(g.name);
@@ -532,8 +558,17 @@ function renderList() {
       +     (prefs[0] ? '<span class="p-bene">béné ' + fmtShort(prefs.length===1?prefs[0]:Math.min.apply(null,prefs)) + '</span>' : '')
       +   '</span>'
       + '</span></button>';
-  }).join('');
-  wrap.querySelectorAll('.p-row').forEach(b=>b.addEventListener('click', ()=>onProductClick(b.dataset.pid, b)));
+  }).join('') + donRow;
+  wrap.querySelectorAll('.p-row[data-pid]').forEach(b=>b.addEventListener('click', ()=>onProductClick(b.dataset.pid, b)));
+  const dr = document.getElementById('donRow');
+  if(dr) dr.addEventListener('click', ()=>{
+    openAmountPad('Don libre', 'Montant donné par la personne', 0, function(v){
+      if(v<=0) return;
+      donSeq++;
+      cart.push({ key:'don_'+donSeq, id:'don', name:'Don', size:'', price:v, qty:1, type:'don' });
+      vibrate(15); renderFooter();
+    });
+  });
 }
 
 /* Mise a jour legere des "reste X" sans reconstruire la liste */
@@ -678,13 +713,14 @@ function buildAmountPad() {
   }));
 }
 
-/* ===== Encaissement (2b) =====
-   1 question : Espèces / Carte. Les cas rares derrière « Autre cas ». */
+/* ===== Encaissement (2a : deux questions) =====
+   1 · Quel prix ? (public / bénévole / offert)   2 · Payé comment ? (espèces / carte) */
 let payState = null;   // { mode:'full'|'pref'|'gift', settle:null|'cash'|'card', prefAmount:null|number }
 
 function openPay() {
   if(!cart.length) return;
   payState = { mode:'full', settle:null, prefAmount:null };
+  renderRecap();
   refreshPay();
   document.getElementById('payScreen').classList.add('open');
 }
@@ -694,27 +730,41 @@ function payAmount() {
   if(payState.mode==='pref') return payState.prefAmount!=null ? payState.prefAmount : prefTotal();
   return total();
 }
+function renderRecap() {
+  document.getElementById('payRecap').innerHTML = cart.map(i=>
+    '<div class="recap-line">'
+    + '<span class="n">' + (i.type==='don' ? 'Don libre' : displayParts(i.name).title) + (i.size ? ' · ' + i.size : '') + '</span>'
+    + '<span class="q">×' + i.qty + '</span>'
+    + '<span class="p">' + fmt(i.price*i.qty) + '</span>'
+    + '</div>').join('')
+    + '<div class="recap-total"><span class="n">Prix public</span><span class="p">' + fmt(total()) + '</span></div>';
+}
 function refreshPay() {
   const t = total(), amt = payAmount();
-  const modeLbl = payState.mode==='gift' ? 'OFFERT' : payState.mode==='pref' ? 'TARIF BÉNÉVOLE' : 'PRIX PUBLIC';
-  document.getElementById('payMode').textContent = cartUnits() + ' ARTICLE' + (cartUnits()>1?'S':'') + ' · ' + modeLbl;
-  document.getElementById('payAmountEl').textContent = fmt(amt);
-  const note = document.getElementById('payNote');
-  if(payState.mode==='pref')      note.innerHTML = 'au lieu de ' + fmt(t) + ' — remise ' + fmt(Math.max(0,t-amt)) + ' · <span class="adj" id="adjLink">ajuster</span>';
-  else if(payState.mode==='gift') note.textContent = 'sorti du stock, rien à encaisser';
-  else                            note.textContent = '';
+  const gift = payState.mode==='gift', pref = payState.mode==='pref';
+
+  document.getElementById('prFullAmt').textContent = fmt(t);
+  document.getElementById('prPrefAmt').textContent = fmt(pref ? amt : prefTotal());
+  const prefSub = document.getElementById('prPrefSub');
+  prefSub.innerHTML = 'remise ' + fmt(Math.max(0, t - (pref ? amt : prefTotal())))
+    + (pref ? ' · <span class="adj" id="adjLink">ajuster</span>' : '');
   const adj = document.getElementById('adjLink');
-  if(adj) adj.addEventListener('click', onAdjust);
+  if(adj) adj.addEventListener('click', function(e){ e.stopPropagation(); onAdjust(); });
 
-  document.getElementById('rowCash').classList.toggle('sel', payState.settle==='cash' && payState.mode!=='gift');
-  document.getElementById('rowCard').classList.toggle('sel', payState.settle==='card' && payState.mode!=='gift');
-  const giftMode = payState.mode==='gift';
-  document.getElementById('rowCash').style.opacity = giftMode ? .35 : 1;
-  document.getElementById('rowCard').style.opacity = giftMode ? .35 : 1;
+  document.getElementById('prFull').classList.toggle('sel', payState.mode==='full');
+  document.getElementById('prPref').classList.toggle('sel', pref);
+  document.getElementById('prGift').classList.toggle('sel', gift);
 
+  document.getElementById('settleGrid').style.display = gift ? 'none' : '';
+  document.getElementById('settleSkip').style.display = gift ? '' : 'none';
+  document.getElementById('stCash').classList.toggle('sel', payState.settle==='cash' && !gift);
+  document.getElementById('stCard').classList.toggle('sel', payState.settle==='card' && !gift);
+
+  document.getElementById('payAmountEl').textContent = fmt(amt);
   const cta = document.getElementById('btnConfirm');
-  cta.disabled = !(giftMode || payState.settle);
-  cta.textContent = giftMode ? 'VALIDER — RIEN À ENCAISSER' : 'ENCAISSER ' + fmt(amt);
+  if(gift)                 { cta.textContent = 'Valider — rien à encaisser'; cta.classList.remove('hint'); }
+  else if(payState.settle) { cta.textContent = 'Encaisser ' + fmt(amt) + (payState.settle==='cash' ? ' en espèces' : ' par carte'); cta.classList.remove('hint'); }
+  else                     { cta.textContent = 'Choisis espèces ou carte'; cta.classList.add('hint'); }
 }
 function onAdjust() {
   openAmountPad('Ajuster le tarif bénévole', 'Tarif du doc : ' + fmt(prefTotal()) + ' — prix public : ' + fmt(total()), payAmount(), function(v){
@@ -722,19 +772,18 @@ function onAdjust() {
     refreshPay();
   });
 }
-function onSettle(m) {
+function onPrice(mode) {
   if(!payState) return;
-  if(payState.mode==='gift') payState.mode = 'full';   // choisir un règlement annule l'offert
+  payState.mode = mode;
+  if(mode!=='pref') payState.prefAmount = null;
+  if(mode==='gift') payState.settle = null;
+  vibrate(15); refreshPay();
+}
+function onSettle(m) {
+  if(!payState || payState.mode==='gift') return;
   payState.settle = m;
   vibrate(15); refreshPay();
 }
-function openOther() {
-  document.getElementById('optPrefSub').textContent = fmt(total()) + ' → ' + fmt(prefTotal()) + ', à régler ensuite';
-  document.getElementById('optFullSub').textContent = fmt(total());
-  document.getElementById('optFull').style.display = payState.mode!=='full' ? '' : 'none';
-  document.getElementById('otherSheet').classList.add('open');
-}
-function closeOther() { document.getElementById('otherSheet').classList.remove('open'); }
 
 function confirmPay() {
   if(!payState) return;
@@ -935,7 +984,8 @@ async function fetchHistory() {
     const r = await fetch(SHEETS_WEBHOOK_URL + '?action=history', { cache:'no-store' });
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
-    if(!Array.isArray(d.rows) || !d.rows.length) { el.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:12px;">Aucune vente pour l\'instant</div>'; return; }
+    if(!Array.isArray(d.rows)) { el.innerHTML = '<div style="color:var(--warn);text-align:center;padding:12px;font-size:13px;line-height:1.5;">⚠ Le script de la Google Sheet est une ancienne version.<br>Recolle <b>apps-script-merch.gs</b> puis Déployer → Nouvelle version.</div>'; return; }
+    if(!d.rows.length) { el.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:12px;">Aucune vente pour l\'instant</div>'; return; }
     el.innerHTML = d.rows.map(h=>{
       const t = new Date(h.ts);
       const hh = isNaN(t) ? h.ts : ('0'+t.getDate()).slice(-2) + '/' + ('0'+(t.getMonth()+1)).slice(-2) + ' ' + ('0'+t.getHours()).slice(-2) + ':' + ('0'+t.getMinutes()).slice(-2);
@@ -1109,23 +1159,15 @@ document.getElementById('szAdd').addEventListener('click', ()=>{
 
 /* Encaissement */
 document.getElementById('payClose').addEventListener('click', ()=>{ payState=null; document.getElementById('payScreen').classList.remove('open'); });
-document.getElementById('rowCash').addEventListener('click', ()=>onSettle('cash'));
-document.getElementById('rowCard').addEventListener('click', ()=>onSettle('card'));
-document.getElementById('btnOther').addEventListener('click', openOther);
-document.getElementById('otherClose').addEventListener('click', closeOther);
-document.getElementById('optPref').addEventListener('click', ()=>{ payState.mode='pref'; payState.prefAmount=null; closeOther(); vibrate(15); refreshPay(); });
-document.getElementById('optGift').addEventListener('click', ()=>{ payState.mode='gift'; payState.settle=null;  closeOther(); vibrate(15); refreshPay(); });
-document.getElementById('optFull').addEventListener('click', ()=>{ payState.mode='full'; payState.prefAmount=null; closeOther(); vibrate(15); refreshPay(); });
-document.getElementById('optDon').addEventListener('click', ()=>{
-  closeOther();
-  openAmountPad('Don libre', 'Montant donné par la personne', 0, function(v){
-    if(v<=0) return;
-    donSeq++;
-    cart.push({ key:'don_'+donSeq, id:'don', name:'Don', size:'', price:v, qty:1, type:'don' });
-    renderFooter(); refreshPay();
-  });
+document.getElementById('prFull').addEventListener('click', ()=>onPrice('full'));
+document.getElementById('prPref').addEventListener('click', ()=>onPrice('pref'));
+document.getElementById('prGift').addEventListener('click', ()=>onPrice('gift'));
+document.getElementById('stCash').addEventListener('click', ()=>onSettle('cash'));
+document.getElementById('stCard').addEventListener('click', ()=>onSettle('card'));
+document.getElementById('btnConfirm').addEventListener('click', ()=>{
+  if(payState && payState.mode!=='gift' && !payState.settle) { vibrate(30); showToast('Choisis Espèces ou Carte', 'err'); return; }
+  confirmPay();
 });
-document.getElementById('btnConfirm').addEventListener('click', confirmPay);
 
 /* Pavé montant */
 document.getElementById('closeAmount').addEventListener('click', ()=>document.getElementById('amountModal').classList.remove('open'));
