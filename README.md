@@ -1,23 +1,48 @@
 # Caisse Bar — La Java
 
-Application web simple pour gérer les encaissements au bar pendant La Java.
+Application web de caisse pour le bar pendant La Java. Un seul fichier
+`index.html`, servi à la racine du site (URL `/`).
 
-## Stack
+## Spécificités
 
-- HTML/CSS/JS pur, un seul fichier `index.html`
-- Sync des ventes vers une Google Sheet via Apps Script webhook
-- Déployé sur Vercel (déploiement auto à chaque push)
+- **Aucun login** — n'importe quel bénévole ouvre l'URL et encaisse direct.
+- **Grille produits** codée par couleur (bières / vins / softs / consigne).
+  Chaque touche = ajout au ticket ; « +1 » flottant + vibration tactile.
+- **Ticket** affiché en haut, scroll interne jusqu'à 38 vh pour rester
+  utilisable sur mobile même avec beaucoup d'articles.
+- **Encaissement** : deux modes — **🎟️ Tickets** · **💳 Carte** (pas
+  d'espèces au bar).
+- **Panneau admin** protégé par PIN 4 chiffres (validation auto au 4e chiffre).
+  Édition des prix (par device, en `localStorage`) et **stats globales**
+  agrégées depuis la Google Sheet (totaux tickets/carte + %, nb
+  d'encaissements, total caisse), rafraîchissables à la demande.
+- **File d'attente offline** : si la Sheet est injoignable, la vente est
+  gardée en `localStorage` et re-tentée toutes les 30 s / dès retour online.
+- **Pastille sync** dans le header (vert / rouge / pulse jaune).
 
-## Configuration
+## Configuration (`index.html`, en haut du `<script>`)
 
-Deux constantes en haut du `<script>` dans `index.html` :
+- `SHEETS_WEBHOOK_URL` — Web App Apps Script de la Sheet bar
+- `ADMIN_PIN` — code admin **fixé dans le source** (partagé sur tous les
+  appareils ; pour le changer, éditer la constante puis `git push`)
+- `PRODUCTS_STORAGE_KEY` — bumper cette clé quand `DEFAULTS` change pour
+  forcer le rechargement du catalogue sur tous les appareils en cache
 
-- `SHEETS_WEBHOOK_URL` — URL du Web App Google Apps Script qui reçoit les ventes
-- PIN admin par défaut : `1234` (stocké en `localStorage`, changeable depuis le panneau admin)
+## Google Sheet
+
+L'Apps Script attaché à la Sheet expose deux endpoints :
+
+- `POST /exec` — ajoute une ligne : *Date · Méthode · Montant · Articles · Device*
+- `GET /exec?action=stats` — renvoie `{tickets, card, countTickets, countCard}`
+  sommés depuis la Sheet
+
+Déploiement à faire en **Application Web · Exécuter en tant que Moi · Qui a
+accès : Tout le monde** (sinon les POST des bénévoles sont bloqués).
 
 ## Workflow
 
-Modifier `index.html` → `git commit` → `git push` → Vercel redéploie automatiquement.
+Modifier `index.html` → `git commit` → `git push` → Vercel redéploie
+automatiquement en ~30 s.
 
 ---
 
