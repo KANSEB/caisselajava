@@ -295,13 +295,13 @@ const DEFAULTS = [
   // Bières — Demi 25cl
   { id:'fresh_d',   name:'Britt Fresh',   sub:'Demi',  price:3.50, cat:'biere', color:'c-blonde'  },
   { id:'blanche_d', name:'Britt Blanche', sub:'Demi',  price:4.00, cat:'biere', color:'c-blanche' },
-  { id:'abbaye_d',  name:'Abbaye 7%',     sub:'Demi',  price:4.00, cat:'biere', color:'c-abbaye'  },
-  { id:'ipa_d',     name:'IPA 7%',        sub:'Demi',  price:4.50, cat:'biere', color:'c-ipa'     },
+  { id:'abbaye_d',  name:'St Erwann Abbaye 7%', sub:'Demi',  price:4.00, cat:'biere', color:'c-abbaye'  },
+  { id:'ipa_d',     name:'St Erwann IPA 7%',    sub:'Demi',  price:4.50, cat:'biere', color:'c-ipa'     },
   // Bières — Pinte 50cl
   { id:'fresh_p',   name:'Britt Fresh',   sub:'Pinte', price:6.00, cat:'biere', color:'c-blonde'  },
   { id:'blanche_p', name:'Britt Blanche', sub:'Pinte', price:8.00, cat:'biere', color:'c-blanche' },
-  { id:'abbaye_p',  name:'Abbaye 7%',     sub:'Pinte', price:8.00, cat:'biere', color:'c-abbaye'  },
-  { id:'ipa_p',     name:'IPA 7%',        sub:'Pinte', price:9.00, cat:'biere', color:'c-ipa'     },
+  { id:'abbaye_p',  name:'St Erwann Abbaye 7%', sub:'Pinte', price:8.00, cat:'biere', color:'c-abbaye'  },
+  { id:'ipa_p',     name:'St Erwann IPA 7%',    sub:'Pinte', price:9.00, cat:'biere', color:'c-ipa'     },
   // Vins — 25cl
   { id:'blanc_25',  name:'Sauvignon',     sub:'25cl',  price:4.00, cat:'vin',   color:'c-blanc'   },
   { id:'rouge_25',  name:'Merlot',        sub:'25cl',  price:4.00, cat:'vin',   color:'c-rouge'   },
@@ -311,17 +311,17 @@ const DEFAULTS = [
   { id:'rouge_50',  name:'Merlot',        sub:'50cl',  price:8.00, cat:'vin',   color:'c-rouge'   },
   { id:'rose_50',   name:'Rosé',          sub:'50cl',  price:8.00, cat:'vin',   color:'c-rose'    },
   // Softs
-  { id:'pomme',     name:'Pomme',         sub:'Granini', price:3.00, cat:'soft', color:'c-soft'   },
-  { id:'multi',     name:'Multifruit',    sub:'Granini', price:3.00, cat:'soft', color:'c-soft'   },
-  { id:'coca',      name:'Coca',          sub:'',        price:2.50, cat:'soft', color:'c-soft'   },
-  { id:'fuzetea',   name:'Fuzetea',       sub:'',        price:2.50, cat:'soft', color:'c-soft'   },
+  { id:'pomme',     name:'Pomme',         sub:'25cl',    price:3.00, cat:'soft', color:'c-soft'   },
+  { id:'multi',     name:'Multifruit',    sub:'25cl',    price:3.00, cat:'soft', color:'c-soft'   },
+  { id:'coca',      name:'Coca',          sub:'25cl',    price:2.50, cat:'soft', color:'c-soft'   },
+  { id:'fuzetea',   name:'Fuzetea',       sub:'25cl',    price:2.50, cat:'soft', color:'c-soft'   },
   { id:'eau',       name:'Cristaline',    sub:'50cl',    price:1.00, cat:'soft', color:'c-soft'   },
   // Consigne
   { id:'cons',      name:'Écocup',        sub:'Consigne', price:1.00, cat:'cons', color:'c-cons'  },
 ];
 
 // Bump la clé quand DEFAULTS change pour forcer le rechargement sur tous les appareils
-const PRODUCTS_STORAGE_KEY = 'lj_products_v3';
+const PRODUCTS_STORAGE_KEY = 'lj_products_v4';
 
 function loadProducts() { try { const s=localStorage.getItem(PRODUCTS_STORAGE_KEY); return s?JSON.parse(s):JSON.parse(JSON.stringify(DEFAULTS)); } catch { return JSON.parse(JSON.stringify(DEFAULTS)); } }
 function saveProducts() { localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products)); }
