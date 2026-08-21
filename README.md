@@ -2,8 +2,8 @@
 
 | App | URL bénévoles | Fichier |
 |---|---|---|
-| Bar | **https://lajava-festival.fr/bar** | `index.html` |
-| Merch | **https://lajava-festival.fr/merch** | `merch.html` |
+| Bar | **https://lajava-festival.fr/appbar** | `index.html` |
+| Merch | **https://lajava-festival.fr/appmerch** | `merch.html` |
 
 Les deux URLs sont des rewrites dans `next.config.ts` du site officiel
 (repo `kanseb/lajava`) qui proxyfient vers ce projet Vercel
