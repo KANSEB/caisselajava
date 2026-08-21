@@ -253,8 +253,9 @@
 
     <div class="config-section">📊 Stats globales (toutes caisses)</div>
     <div class="session-stats" id="sessionStats"><div style="text-align:center;color:var(--muted);font-size:13px;padding:8px;">Chargement…</div></div>
-    <div style="text-align:center; margin: 8px 0 4px;">
+    <div style="display:flex; gap:8px; justify-content:center; margin: 8px 0 4px;">
       <button class="btn-secondary" id="btnRefreshStats" style="font-size:12px; padding:8px 14px;">↻ Rafraîchir</button>
+      <button class="btn-secondary danger" id="btnResetAll" style="font-size:12px; padding:8px 14px;">🗑 Tout réinitialiser</button>
     </div>
 
     <div class="config-section">💶 Prix des produits</div>
@@ -455,13 +456,28 @@ function renderConfig() {
   });
 }
 
+async function fetchWithTimeout(url, ms) {
+  const ctrl = new AbortController();
+  const id = setTimeout(()=>ctrl.abort(), ms);
+  try { return await fetch(url, { cache: 'no-store', redirect: 'follow', signal: ctrl.signal }); }
+  finally { clearTimeout(id); }
+}
+
 async function fetchGlobalStats() {
   const el = document.getElementById('sessionStats');
   el.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px;">Chargement…</div>';
+  let lastErr;
   try {
-    const r = await fetch(SHEETS_WEBHOOK_URL + '?action=stats', { cache: 'no-store' });
-    if(!r.ok) throw new Error('HTTP ' + r.status);
-    const d = await r.json();
+    let d = null;
+    // 2 tentatives : Apps Script peut être lent au démarrage à froid
+    for (let attempt = 0; attempt < 2 && !d; attempt++) {
+      try {
+        const r = await fetchWithTimeout(SHEETS_WEBHOOK_URL + '?action=stats&_=' + Date.now(), 12000);
+        if(!r.ok) throw new Error('HTTP ' + r.status);
+        d = await r.json();
+      } catch(err) { lastErr = err; }
+    }
+    if(!d) throw lastErr || new Error('pas de réponse');
     const tot = (d.tickets||0) + (d.card||0);
     const totCount = (d.countTickets||0) + (d.countCard||0);
     const pct = (v)=> tot>0 ? Math.round(v/tot*100) : 0;
@@ -658,6 +674,22 @@ document.getElementById('closeConfig').addEventListener('click',()=>document.get
 document.getElementById('closePay').addEventListener('click',()=>document.getElementById('payModal').classList.remove('open'));
 
 document.getElementById('btnRefreshStats').addEventListener('click',fetchGlobalStats);
+
+document.getElementById('btnResetAll').addEventListener('click', async ()=>{
+  if(!confirm('⚠️ RÉINITIALISER TOUTES LES VENTES ?\n\nCela efface définitivement tous les encaissements enregistrés dans la Google Sheet (tickets, articles, fûts).\n\nCette action est irréversible.')) return;
+  if(!confirm('Confirme une dernière fois : on remet vraiment tout à zéro ?')) return;
+  const el = document.getElementById('sessionStats');
+  el.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px;">Réinitialisation…</div>';
+  try {
+    const r = await fetchWithTimeout(SHEETS_WEBHOOK_URL + '?action=reset&key=' + encodeURIComponent(ADMIN_PIN) + '&_=' + Date.now(), 15000);
+    const d = await r.json();
+    if(d && d.ok) { showToast('✓ Tout a été réinitialisé', 'ok'); }
+    else { showToast('⚠ Échec : ' + ((d && d.error) || 'inconnu'), 'err'); }
+  } catch(e) {
+    showToast('⚠ Erreur réseau', 'err');
+  }
+  fetchGlobalStats();
+});
 
 document.getElementById('btnPay').addEventListener('click',()=>{
   if(total()===0) return;

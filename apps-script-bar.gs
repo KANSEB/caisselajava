@@ -23,6 +23,9 @@ const TAB_TICKETS = 'App_Tickets';
 const TAB_VENTES  = 'App_Ventes';
 const TAB_LIVE    = 'App_Live';
 
+// Clé exigée pour la réinitialisation (= PIN admin de l'app).
+const RESET_KEY = '3216';
+
 // Volume d'un fût par bière (L). Le nom doit matcher ce qu'envoie l'app.
 const FUTS = [
   { nom: 'Britt Fresh',          volFut: 30 },
@@ -106,6 +109,17 @@ function rebuildLive() {
 
 function round2(n) { return Math.round(n * 100) / 100; }
 
+/** Vide les ventes/tickets (garde les en-têtes) et remet App_Live à zéro. */
+function resetData() {
+  [TAB_TICKETS, TAB_VENTES].forEach(function (name) {
+    const s = ss().getSheetByName(name);
+    if (s && s.getLastRow() > 1) {
+      s.getRange(2, 1, s.getLastRow() - 1, s.getLastColumn()).clearContent();
+    }
+  });
+  rebuildLive();
+}
+
 /** Reçoit un encaissement depuis l'app. */
 function doPost(e) {
   try {
@@ -133,6 +147,13 @@ function doPost(e) {
 
 /** Stats globales pour le panneau admin de l'app. */
 function doGet(e) {
+  if (e && e.parameter && e.parameter.action === 'reset') {
+    if (String(e.parameter.key) !== RESET_KEY) {
+      return json({ ok: false, error: 'clé invalide' });
+    }
+    resetData();
+    return json({ ok: true });
+  }
   if (e && e.parameter && e.parameter.action === 'stats') {
     const t = ss().getSheetByName(TAB_TICKETS);
     let tickets = 0, card = 0, countTickets = 0, countCard = 0;
