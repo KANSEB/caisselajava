@@ -53,17 +53,18 @@ function getOrCreateTab(name) {
 }
 
 /** À lancer une fois à la main pour préparer les onglets. */
+const HEAD_TICKETS = ['Horodatage', 'Méthode', 'Montant (€)', 'Device', 'Vendeur'];
+const HEAD_VENTES  = ['Horodatage', 'Méthode', 'Produit', 'Format', 'Qté', 'PU (€)', 'Montant (€)', 'Volume (L)', 'Device', 'Vendeur'];
+
+function setHeader(sheet, head) {
+  sheet.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold');
+}
+
 function initTabs() {
   const t = getOrCreateTab(TAB_TICKETS);
-  if (t.getLastRow() === 0) {
-    t.appendRow(['Horodatage', 'Méthode', 'Montant (€)', 'Device']);
-    t.getRange('1:1').setFontWeight('bold');
-  }
+  setHeader(t, HEAD_TICKETS);
   const v = getOrCreateTab(TAB_VENTES);
-  if (v.getLastRow() === 0) {
-    v.appendRow(['Horodatage', 'Méthode', 'Produit', 'Format', 'Qté', 'PU (€)', 'Montant (€)', 'Volume (L)', 'Device']);
-    v.getRange('1:1').setFontWeight('bold');
-  }
+  setHeader(v, HEAD_VENTES);
   getOrCreateTab(TAB_LIVE);
   rebuildLive();
 }
@@ -126,16 +127,18 @@ function doPost(e) {
     const data = JSON.parse(e.postData.contents);
     const ts = data.ts ? new Date(data.ts) : new Date();
 
+    const vendor = data.vendor || '';
+
     const tTickets = getOrCreateTab(TAB_TICKETS);
     if (tTickets.getLastRow() === 0) initTabs();
-    tTickets.appendRow([ts, data.method || '', Number(data.amount) || 0, data.deviceId || '']);
+    tTickets.appendRow([ts, data.method || '', Number(data.amount) || 0, data.deviceId || '', vendor]);
 
     const tVentes = getOrCreateTab(TAB_VENTES);
     (data.items || []).forEach(function (it) {
       const qty = Number(it.qty) || 0;
       const pu = Number(it.price) || 0;
       const vol = volumePortion(it.sub) * qty;
-      tVentes.appendRow([ts, data.method || '', it.name || '', it.sub || '', qty, pu, pu * qty, vol, data.deviceId || '']);
+      tVentes.appendRow([ts, data.method || '', it.name || '', it.sub || '', qty, pu, pu * qty, vol, data.deviceId || '', vendor]);
     });
 
     rebuildLive();
