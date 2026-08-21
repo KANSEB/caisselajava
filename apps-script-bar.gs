@@ -7,15 +7,16 @@
  *  créer les onglets et autoriser le script.
  *
  *  Déploiement :
- *    Déployer → Nouveau déploiement → Application Web
- *      · Exécuter en tant que : Moi
- *      · Qui a accès : Tout le monde
- *    Copier l'URL /exec → la coller dans index.html (SHEETS_WEBHOOK_URL)
+ *    Déployer → Gérer les déploiements → ✏️ → Nouvelle version → Déployer
+ *    (garde la même URL /exec ; nécessaire pour que doPost utilise ce code)
  *
  *  L'app POST chaque encaissement ; le script :
  *    - journalise le ticket dans l'onglet "App_Tickets"
  *    - journalise chaque article dans "App_Ventes" (avec volume L)
- *    - l'onglet "App_Live" agrège en direct : litres + fûts entamés/bière
+ *    - recalcule l'onglet "App_Live" : litres + fûts entamés / bière
+ *
+ *  NB : App_Live est rempli avec des VALEURS (pas des formules) pour
+ *  éviter tout souci de séparateur , / ; selon la locale du classeur.
  ************************************************************/
 
 const TAB_TICKETS = 'App_Tickets';
@@ -50,38 +51,60 @@ function getOrCreateTab(name) {
 
 /** À lancer une fois à la main pour préparer les onglets. */
 function initTabs() {
-  // Tickets
   const t = getOrCreateTab(TAB_TICKETS);
   if (t.getLastRow() === 0) {
     t.appendRow(['Horodatage', 'Méthode', 'Montant (€)', 'Device']);
     t.getRange('1:1').setFontWeight('bold');
   }
-  // Ventes (une ligne par article)
   const v = getOrCreateTab(TAB_VENTES);
   if (v.getLastRow() === 0) {
     v.appendRow(['Horodatage', 'Méthode', 'Produit', 'Format', 'Qté', 'PU (€)', 'Montant (€)', 'Volume (L)', 'Device']);
     v.getRange('1:1').setFontWeight('bold');
   }
-  // Live (agrégats par bière, en formules)
+  getOrCreateTab(TAB_LIVE);
+  rebuildLive();
+}
+
+/** Recalcule l'onglet App_Live à partir de App_Ventes (valeurs, pas formules). */
+function rebuildLive() {
+  const v = ss().getSheetByName(TAB_VENTES);
+  // Init des agrégats par bière
+  const agg = {};
+  FUTS.forEach(function (f) { agg[f.nom] = { litres: 0, demis: 0, pintes: 0, volFut: f.volFut }; });
+
+  if (v && v.getLastRow() > 1) {
+    // Colonnes : C=Produit(3), D=Format(4), E=Qté(5), H=Volume(8)
+    const data = v.getRange(2, 3, v.getLastRow() - 1, 6).getValues(); // C..H
+    data.forEach(function (r) {
+      const produit = String(r[0]).trim();       // C
+      const format  = String(r[1]).toLowerCase(); // D
+      const qty     = Number(r[2]) || 0;          // E
+      const vol     = Number(r[5]) || 0;          // H
+      if (agg[produit]) {
+        agg[produit].litres += vol;
+        if (format.indexOf('demi') !== -1)  agg[produit].demis  += qty;
+        if (format.indexOf('pinte') !== -1) agg[produit].pintes += qty;
+      }
+    });
+  }
+
   const l = getOrCreateTab(TAB_LIVE);
   l.clearContents();
-  l.getRange('A1:F1').setValues([['Bière', 'Litres vendus', 'Vol/fût (L)', 'Fûts entamés', 'Nb demis', 'Nb pintes']]);
-  l.getRange('A1:F1').setFontWeight('bold');
-  FUTS.forEach(function (f, i) {
-    const r = i + 2;
-    l.getRange(r, 1).setValue(f.nom);
-    l.getRange(r, 2).setFormula('=SUMIF(' + TAB_VENTES + '!C:C, A' + r + ', ' + TAB_VENTES + '!H:H)');
-    l.getRange(r, 3).setValue(f.volFut);
-    l.getRange(r, 4).setFormula('=IF(C' + r + '=0,0,B' + r + '/C' + r + ')');
-    l.getRange(r, 5).setFormula('=SUMIFS(' + TAB_VENTES + '!E:E, ' + TAB_VENTES + '!C:C, A' + r + ', ' + TAB_VENTES + '!D:D, "Demi")');
-    l.getRange(r, 6).setFormula('=SUMIFS(' + TAB_VENTES + '!E:E, ' + TAB_VENTES + '!C:C, A' + r + ', ' + TAB_VENTES + '!D:D, "Pinte")');
+  const rows = [['Bière', 'Litres vendus', 'Vol/fût (L)', 'Fûts entamés', 'Nb demis', 'Nb pintes']];
+  let totL = 0, totFuts = 0;
+  FUTS.forEach(function (f) {
+    const a = agg[f.nom];
+    const futs = a.volFut ? a.litres / a.volFut : 0;
+    totL += a.litres; totFuts += futs;
+    rows.push([f.nom, round2(a.litres), a.volFut, round2(futs), a.demis, a.pintes]);
   });
-  const total = FUTS.length + 2;
-  l.getRange(total, 1).setValue('TOTAL');
-  l.getRange(total, 2).setFormula('=SUM(B2:B' + (total - 1) + ')');
-  l.getRange(total, 4).setFormula('=SUM(D2:D' + (total - 1) + ')');
-  l.getRange(total, 1, 1, 6).setFontWeight('bold');
+  rows.push(['TOTAL', round2(totL), '', round2(totFuts), '', '']);
+  l.getRange(1, 1, rows.length, 6).setValues(rows);
+  l.getRange('1:1').setFontWeight('bold');
+  l.getRange(rows.length, 1, 1, 6).setFontWeight('bold');
 }
+
+function round2(n) { return Math.round(n * 100) / 100; }
 
 /** Reçoit un encaissement depuis l'app. */
 function doPost(e) {
@@ -101,6 +124,7 @@ function doPost(e) {
       tVentes.appendRow([ts, data.method || '', it.name || '', it.sub || '', qty, pu, pu * qty, vol, data.deviceId || '']);
     });
 
+    rebuildLive();
     return json({ ok: true });
   } catch (err) {
     return json({ ok: false, error: String(err) });
