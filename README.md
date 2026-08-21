@@ -1,3 +1,15 @@
+# Caisses — La Java
+
+| App | URL bénévoles | Fichier |
+|---|---|---|
+| Bar | **https://lajava-festival.fr/bar** | `index.html` |
+| Merch | **https://lajava-festival.fr/merch** | `merch.html` |
+
+Les deux URLs sont des rewrites dans `next.config.ts` du site officiel
+(repo `kanseb/lajava`) qui proxyfient vers ce projet Vercel
+(`caisselajava.vercel.app`). Un push ici suffit à mettre à jour les caisses,
+sans rebuild du site.
+
 # Caisse Bar — La Java
 
 Application web de caisse pour le bar pendant La Java. Un seul fichier
