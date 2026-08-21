@@ -1,5 +1,15 @@
 {
   "rewrites": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "merch.lajava-festival.fr" }],
+      "destination": "/merch.html"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "bar.lajava-festival.fr" }],
+      "destination": "/index.html"
+    },
     { "source": "/merch", "destination": "/merch.html" },
     { "source": "/bar", "destination": "/index.html" }
   ]
