@@ -8,7 +8,9 @@
  *    croisés avec les prix PU Public / PU Préf (onglet Rentabilité).
  *  • À chaque encaissement envoyé par l'app :
  *      – décrémente la bonne case TAILLE dans Inventaire (le stock "vivant") ;
- *      – incrémente le compteur Normal / Préf / Don de l'article dans Rentabilité ;
+ *      – incrémente les compteurs dans Rentabilité : Vendue pour toute vente
+ *        payée (préf incluses, car les formules font « Vendue − Préf »),
+ *        + Préf si tarif préférentiel, ou Don seul si offert ;
  *      – journalise la vente dans un onglet "Ventes" (créé automatiquement).
  *  • Ne touche JAMAIS aux colonnes en formule (Total, Valeur, CA, Marge, ROI…).
  *
@@ -47,7 +49,8 @@ var LBL_ARTICLE   = 'Article';
 var LBL_MARQUE    = 'Marque';
 var SIZE_LABELS   = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'TU'];  // TU = taille unique (tote)
 var LBL_PRODUITE  = 'Produite';
-var LBL_NORMAL    = 'Normal';
+var LBL_VENDUE    = 'Vendue';    // compteur "toutes ventes payées" (préf incluses)
+var LBL_NORMAL    = 'Normal';    // ancien nom de la même colonne (fallback)
 var LBL_PREF      = 'Préf';
 var LBL_DON       = 'Don';
 var LBL_PU_PUBLIC = 'PU Public';
@@ -72,7 +75,7 @@ function verifierStructure() {
   try {
     var rent = locateRentabilite();
     msg.push('✅ Rentabilité : en-tête ligne ' + rent.headerRow +
-             ' | Produite=' + col(rent.cProduite) + ' Normal=' + col(rent.cNormal) +
+             ' | Produite=' + col(rent.cProduite) + ' Vendue/Normal=' + col(rent.cNormal) +
              ' Préf=' + col(rent.cPref) + ' Don=' + col(rent.cDon) +
              ' PU Public=' + col(rent.cPub) + ' PU Préf=' + col(rent.cPref2) +
              ' | ' + rent.articles.length + ' article(s).');
@@ -180,9 +183,9 @@ function reverseSale(sale) {
   if (!items.length) return;
   var inv  = locateInventory();
   var rent = locateRentabilite();
-  var counterCol = sale.method === 'gift' ? rent.cDon
-                 : sale.method === 'pref' ? rent.cPref
-                 : rent.cNormal;
+  var counterCols = sale.method === 'gift' ? [rent.cDon]
+                  : sale.method === 'pref' ? [rent.cNormal, rent.cPref]
+                  : [rent.cNormal];
   items.forEach(function (it) {
     var nkey = norm(it.name);
     var artRow = inv.rowByName[nkey];
@@ -194,10 +197,11 @@ function reverseSale(sale) {
       }
     }
     var rRow = rent.rowByName[nkey];
-    if (rRow && counterCol) {
-      var c = rent.sheet.getRange(rRow, counterCol);
+    if (rRow) counterCols.forEach(function (cc) {
+      if (!cc) return;
+      var c = rent.sheet.getRange(rRow, cc);
       c.setValue(Math.max(0, num(c.getValue()) - num(it.qty)));
-    }
+    });
   });
 }
 
@@ -307,9 +311,12 @@ function applyToSheet(sale) {
   var invSheet  = inv.sheet;
   var rentSheet = rent.sheet;
 
-  var counterCol = sale.method === 'gift' ? rent.cDon
-                 : sale.method === 'pref' ? rent.cPref
-                 : rent.cNormal;   // cash | card => vente "normale"
+  /* Vendue compte TOUTES les ventes payées (les formules du doc font
+     « Vendue − Préf » pour le plein tarif) ; une vente préf incrémente
+     donc Vendue ET Préf ; un offert n'incrémente que Don. */
+  var counterCols = sale.method === 'gift' ? [rent.cDon]
+                  : sale.method === 'pref' ? [rent.cNormal, rent.cPref]
+                  : [rent.cNormal];   // cash | card => vente plein tarif
 
   items.forEach(function (it) {
     var nkey = norm(it.name);
@@ -325,12 +332,13 @@ function applyToSheet(sale) {
       }
     }
 
-    /* 2) Rentabilité : incrémente Normal / Préf / Don */
+    /* 2) Rentabilité : incrémente Vendue (+ Préf) / Don */
     var rRow = rent.rowByName[nkey];
-    if (rRow && counterCol) {
-      var c = rentSheet.getRange(rRow, counterCol);
+    if (rRow) counterCols.forEach(function (cc) {
+      if (!cc) return;
+      var c = rentSheet.getRange(rRow, cc);
       c.setValue(num(c.getValue()) + num(it.qty));
-    }
+    });
   });
 }
 
@@ -427,7 +435,7 @@ function locateRentabilite() {
 
   var row = grid[headerRow];
   var cProduite = findInRow(row, LBL_PRODUITE);
-  var cNormal   = findInRow(row, LBL_NORMAL);
+  var cNormal   = findInRow(row, LBL_VENDUE) || findInRow(row, LBL_NORMAL);
   var cPref     = findExact(row, LBL_PREF);      // "Préf" seul, pas "PU Préf"
   var cDon      = findExact(row, LBL_DON);
   var cPub      = findInRow(row, LBL_PU_PUBLIC);
