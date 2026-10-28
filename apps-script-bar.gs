@@ -31,7 +31,7 @@ const FUTS = [
   { nom: 'Britt Fresh',          volFut: 30 },
   { nom: 'Britt Blanche',        volFut: 20 },
   { nom: 'St Erwann Abbaye 7%',  volFut: 20 },
-  { nom: 'IPA Hool',             volFut: 20 },
+  { nom: 'IPA Holl',             volFut: 20 },
 ];
 
 // Volume d'une portion (L) selon le sous-titre du produit.
