@@ -31,7 +31,7 @@ const FUTS = [
   { nom: 'Britt Fresh',          volFut: 30 },
   { nom: 'Britt Blanche',        volFut: 20 },
   { nom: 'St Erwann Abbaye 7%',  volFut: 20 },
-  { nom: 'St Erwann IPA 7%',     volFut: 20 },
+  { nom: 'IPA Hool',             volFut: 20 },
 ];
 
 // Volume d'une portion (L) selon le sous-titre du produit.
@@ -149,7 +149,28 @@ function doPost(e) {
 }
 
 /** Stats globales pour le panneau admin de l'app. */
+/* Liste des produits masqués, partagée entre tous les appareils (Script Properties). */
+function getHidden() {
+  const raw = PropertiesService.getScriptProperties().getProperty('hidden') || '[]';
+  try { const a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+}
+function setHidden(ids) {
+  PropertiesService.getScriptProperties().setProperty('hidden', JSON.stringify(ids || []));
+}
+
 function doGet(e) {
+  if (e && e.parameter && e.parameter.action === 'visibility') {
+    return json({ hidden: getHidden() });
+  }
+  if (e && e.parameter && e.parameter.action === 'setvisibility') {
+    if (String(e.parameter.key) !== RESET_KEY) {
+      return json({ ok: false, error: 'clé invalide' });
+    }
+    const raw = String(e.parameter.hidden || '');
+    const ids = raw ? raw.split(',').map(function (s) { return s.trim(); }).filter(String) : [];
+    setHidden(ids);
+    return json({ ok: true, hidden: ids });
+  }
   if (e && e.parameter && e.parameter.action === 'reset') {
     if (String(e.parameter.key) !== RESET_KEY) {
       return json({ ok: false, error: 'clé invalide' });

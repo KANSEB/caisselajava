@@ -128,7 +128,10 @@
 
   /* CONFIG */
   .config-section { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
-  .config-item { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface2); border-radius: 10px; margin-bottom: 6px; }
+  .config-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--surface2); border-radius: 10px; margin-bottom: 6px; }
+  .config-item.is-hidden { opacity: 0.5; }
+  .config-vis { flex-shrink: 0; width: 38px; height: 38px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); font-size: 17px; cursor: pointer; line-height: 1; }
+  .config-vis:active { transform: scale(0.92); }
   .config-name { flex: 1; font-size: 15px; font-weight: 700; }
   .config-name-input { flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 15px; font-weight: 700; padding: 8px 10px; }
   .config-name-input:focus { outline: none; border-color: var(--accent); }
@@ -301,12 +304,12 @@ const DEFAULTS = [
   { id:'fresh_d',   name:'Britt Fresh',   sub:'Demi',  price:3.50, cat:'biere', color:'c-blonde'  },
   { id:'blanche_d', name:'Britt Blanche', sub:'Demi',  price:4.00, cat:'biere', color:'c-blanche' },
   { id:'abbaye_d',  name:'St Erwann Abbaye 7%', sub:'Demi',  price:4.00, cat:'biere', color:'c-abbaye'  },
-  { id:'ipa_d',     name:'St Erwann IPA 7%',    sub:'Demi',  price:4.50, cat:'biere', color:'c-ipa'     },
+  { id:'ipa_d',     name:'IPA Hool',      sub:'Demi',  price:4.50, cat:'biere', color:'c-ipa'     },
   // Bières — Pinte 50cl
   { id:'fresh_p',   name:'Britt Fresh',   sub:'Pinte', price:6.00, cat:'biere', color:'c-blonde'  },
   { id:'blanche_p', name:'Britt Blanche', sub:'Pinte', price:8.00, cat:'biere', color:'c-blanche' },
   { id:'abbaye_p',  name:'St Erwann Abbaye 7%', sub:'Pinte', price:8.00, cat:'biere', color:'c-abbaye'  },
-  { id:'ipa_p',     name:'St Erwann IPA 7%',    sub:'Pinte', price:9.00, cat:'biere', color:'c-ipa'     },
+  { id:'ipa_p',     name:'IPA Hool',      sub:'Pinte', price:9.00, cat:'biere', color:'c-ipa'     },
   // Vins — 25cl
   { id:'blanc_25',  name:'Sauvignon',     sub:'25cl',  price:4.00, cat:'vin',   color:'c-blanc'   },
   { id:'rouge_25',  name:'Merlot',        sub:'25cl',  price:4.00, cat:'vin',   color:'c-rouge'   },
@@ -326,24 +329,31 @@ const DEFAULTS = [
 ];
 
 // Bump la clé quand DEFAULTS change pour forcer le rechargement sur tous les appareils
-const PRODUCTS_STORAGE_KEY = 'lj_products_v4';
+const PRODUCTS_STORAGE_KEY = 'lj_products_v5';
 
 function loadProducts() { try { const s=localStorage.getItem(PRODUCTS_STORAGE_KEY); return s?JSON.parse(s):JSON.parse(JSON.stringify(DEFAULTS)); } catch { return JSON.parse(JSON.stringify(DEFAULTS)); } }
 function saveProducts() { localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products)); }
 
+/* Produits masqués — partagés via la Google Sheet pour se propager sur tous les appareils.
+   Cache local pour affichage immédiat avant la réponse serveur. */
+let hiddenIds = new Set();
+function loadHiddenCache() { try { return new Set(JSON.parse(localStorage.getItem('lj_hidden')||'[]')); } catch { return new Set(); } }
+function saveHiddenCache() { try { localStorage.setItem('lj_hidden', JSON.stringify([...hiddenIds])); } catch {} }
 
 let products = loadProducts();
 let cart = [];
+hiddenIds = loadHiddenCache();
 
 function vibrate(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch {} }
 
 function renderGrid() {
-  const demis   = products.filter(p=>p.cat==='biere'&&p.sub==='Demi');
-  const pintes  = products.filter(p=>p.cat==='biere'&&p.sub==='Pinte');
-  const vins25  = products.filter(p=>p.cat==='vin'  &&p.sub==='25cl');
-  const vins50  = products.filter(p=>p.cat==='vin'  &&p.sub==='50cl');
-  const softs   = products.filter(p=>p.cat==='soft');
-  const cons    = products.filter(p=>p.cat==='cons');
+  const vis     = products.filter(p=>!hiddenIds.has(p.id));
+  const demis   = vis.filter(p=>p.cat==='biere'&&p.sub==='Demi');
+  const pintes  = vis.filter(p=>p.cat==='biere'&&p.sub==='Pinte');
+  const vins25  = vis.filter(p=>p.cat==='vin'  &&p.sub==='25cl');
+  const vins50  = vis.filter(p=>p.cat==='vin'  &&p.sub==='50cl');
+  const softs   = vis.filter(p=>p.cat==='soft');
+  const cons    = vis.filter(p=>p.cat==='cons');
 
   document.getElementById('gridWrap').innerHTML = `
     <div class="section">
@@ -447,7 +457,9 @@ function renderConfig() {
     const items=products.filter(p=>p.cat===c.key);
     return `<div class="config-section">${c.label}</div>`+items.map(p=>{
       const idx=products.indexOf(p);
-      return `<div class="config-item">
+      const off = hiddenIds.has(p.id);
+      return `<div class="config-item${off?' is-hidden':''}">
+        <button class="config-vis" data-id="${p.id}" title="${off?'Masqué — cliquer pour afficher':'Visible — cliquer pour masquer'}">${off?'🚫':'👁'}</button>
         <input class="config-name-input" type="text" value="${escapeAttr(p.name)}" data-idx="${idx}" data-field="name" placeholder="Nom">
         <input class="config-sub-input" type="text" value="${escapeAttr(p.sub)}" data-idx="${idx}" data-field="sub" placeholder="Format">
         <input class="config-price-input" type="number" step="0.5" min="0" value="${p.price.toFixed(2)}" data-idx="${idx}" data-field="price">
@@ -469,7 +481,41 @@ function renderConfig() {
       saveProducts(); renderGrid();
     });
   });
+  document.querySelectorAll('#configItems .config-vis').forEach(btn=>{
+    btn.addEventListener('click',()=>toggleVisibility(btn.dataset.id));
+  });
 }
+
+/* Masquer/afficher un produit — propagé à tous les appareils via la Sheet. */
+async function fetchVisibility() {
+  try {
+    const r = await fetchWithTimeout(SHEETS_WEBHOOK_URL + '?action=visibility&_=' + Date.now(), 12000);
+    const d = await r.json();
+    if(d && Array.isArray(d.hidden)) {
+      hiddenIds = new Set(d.hidden);
+      saveHiddenCache();
+      renderGrid();
+    }
+  } catch(e) { /* garde le cache local */ }
+}
+
+async function toggleVisibility(id) {
+  vibrate(15);
+  if(hiddenIds.has(id)) hiddenIds.delete(id); else hiddenIds.add(id);
+  saveHiddenCache();
+  renderGrid();
+  renderConfig();
+  try {
+    const url = SHEETS_WEBHOOK_URL + '?action=setvisibility&key=' + encodeURIComponent(ADMIN_PIN)
+      + '&hidden=' + encodeURIComponent([...hiddenIds].join(',')) + '&_=' + Date.now();
+    const r = await fetchWithTimeout(url, 12000);
+    const d = await r.json();
+    if(!(d && d.ok)) showToast('⚠ Synchro échouée (local OK)', 'err');
+    else showToast('✓ Visibilité propagée', 'ok');
+  } catch(e) { showToast('⚠ Hors-ligne — propagation en attente', 'err'); }
+}
+
+function escapeAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function escapeAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -676,6 +722,10 @@ window.addEventListener('online', retryQueue);
 setInterval(retryQueue, 30000);
 retryQueue();
 
+// visibilité produits (partagée) : au chargement + rafraîchie périodiquement
+fetchVisibility();
+setInterval(fetchVisibility, 60000);
+
 document.getElementById('btnClear').addEventListener('click',clearCart);
 document.getElementById('btnRemove').addEventListener('click',removeLast);
 
@@ -684,6 +734,7 @@ document.getElementById('btnConfig').addEventListener('click',()=>{
     renderConfig();
     document.getElementById('configModal').classList.add('open');
     fetchGlobalStats();
+    fetchVisibility().then(renderConfig);
   });
 });
 document.getElementById('closePin').addEventListener('click',closePin);
