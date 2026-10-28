@@ -22,11 +22,13 @@ const RESET_KEY = '3216';           // = PIN admin de l'app
 const DEFAULT_EVENT = 'Java Club';  // événement par défaut au premier lancement
 
 // Volume d'un fût par bière (L). Le nom doit matcher ce qu'envoie l'app.
+// ids = identifiants des produits dans l'app (demi + pinte) : une bière masquée
+// dans l'admin disparaît du Live tant qu'elle n'a pas de ventes.
 const FUTS = [
-  { nom: 'Britt Fresh',          volFut: 30 },
-  { nom: 'Britt Blanche',        volFut: 20 },
-  { nom: 'St Erwann Abbaye 7%',  volFut: 20 },
-  { nom: 'IPA Holl',             volFut: 20 },
+  { nom: 'Britt Fresh',          volFut: 30, ids: ['fresh_d', 'fresh_p'] },
+  { nom: 'Britt Blanche',        volFut: 20, ids: ['blanche_d', 'blanche_p'] },
+  { nom: 'St Erwann Abbaye 7%',  volFut: 20, ids: ['abbaye_d', 'abbaye_p'] },
+  { nom: 'IPA Holl',             volFut: 20, ids: ['ipa_d', 'ipa_p'] },
 ];
 
 const HEAD_TICKETS = ['Horodatage', 'Méthode', 'Montant (€)', 'Device', 'Vendeur'];
@@ -76,6 +78,25 @@ function initTabs() {
   const ev = getEvent();
   tabsFor(ev);
   rebuildLive(ev);
+  nettoyerOnglets();
+}
+
+/** Supprime les onglets inutiles s'ils sont vides : "Feuille 1"/"Sheet1" par défaut
+ *  et les anciens App_Tickets / App_Ventes / App_Live. Ne touche jamais un onglet
+ *  qui contient des ventes. */
+function nettoyerOnglets() {
+  const book = ss();
+  ['Feuille 1', 'Sheet1', 'App_Tickets', 'App_Ventes', 'App_Live'].forEach(function (name) {
+    const sh = book.getSheetByName(name);
+    if (!sh || book.getSheets().length <= 1) return;
+    const vide = name === 'App_Live' ? !aDesVentesLive(sh) : sh.getLastRow() <= 1;
+    if (vide) book.deleteSheet(sh);
+  });
+}
+function aDesVentesLive(sh) {
+  if (sh.getLastRow() < 2) return false;
+  const litres = sh.getRange(2, 2, sh.getLastRow() - 1, 1).getValues();
+  return litres.some(function (r) { return Number(r[0]) > 0; });
 }
 
 function volumePortion(sub) {
@@ -115,8 +136,11 @@ function rebuildLive(ev) {
   l.clearContents();
   const rows = [['Bière', 'Litres vendus', 'Vol/fût (L)', 'Fûts entamés', 'Nb demis', 'Nb pintes']];
   let totL = 0, totFuts = 0;
+  const hidden = getHidden();
   FUTS.forEach(function (f) {
     const a = agg[f.nom];
+    const masquee = f.ids.every(function (id) { return hidden.indexOf(id) !== -1; });
+    if (masquee && a.litres === 0) return;
     const futs = a.volFut ? a.litres / a.volFut : 0;
     totL += a.litres; totFuts += futs;
     rows.push([f.nom, round2(a.litres), a.volFut, round2(futs), a.demis, a.pintes]);
@@ -184,6 +208,7 @@ function doGet(e) {
     const raw = String(p.hidden || '');
     const ids = raw ? raw.split(',').map(function (s) { return s.trim(); }).filter(String) : [];
     setHidden(ids);
+    rebuildLive(getEvent());
     return json({ ok: true, hidden: ids });
   }
   if (p.action === 'reset') {
