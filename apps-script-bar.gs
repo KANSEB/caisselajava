@@ -19,7 +19,7 @@
  ************************************************************/
 
 const RESET_KEY = '3216';           // = PIN admin de l'app
-const DEFAULT_EVENT = 'La Java';    // événement par défaut au premier lancement
+const DEFAULT_EVENT = 'Java Club';  // événement par défaut au premier lancement
 
 // Volume d'un fût par bière (L). Le nom doit matcher ce qu'envoie l'app.
 const FUTS = [
