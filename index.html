@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Caisse Bar — La Java</title>
+<title>Caisse Bar</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
@@ -153,8 +153,9 @@
 
   /* PAY */
   .pay-total { font-size: 52px; font-weight: 900; color: var(--accent); text-align: center; margin: 16px 0; }
-  .pay-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0; }
-  .pay-method { padding: 24px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface2); font-size: 17px; font-weight: 800; cursor: pointer; text-align: center; transition: all 0.15s; color: var(--text); }
+  .pay-methods { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; margin: 14px 0; }
+  .pay-method.is-off { display: none; }
+  .pay-method { padding: 22px 8px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface2); font-size: 17px; font-weight: 800; cursor: pointer; text-align: center; transition: all 0.15s; color: var(--text); }
   .pay-method.selected { border-color: var(--accent); color: var(--accent); background: rgba(212,255,0,0.08); }
   .pay-method-icon { font-size: 32px; display: block; margin-bottom: 8px; }
   .btn-confirm { width: 100%; padding: 18px; background: var(--success); border: none; border-radius: 12px; font-size: 19px; font-weight: 900; color: #000; cursor: pointer; display: none; }
@@ -196,7 +197,7 @@
 
 <div class="header">
   <div class="header-volunteer">
-    <div class="header-title">BAR <span>LA JAVA</span></div>
+    <div class="header-title">BAR <span id="eventName"></span></div>
     <div class="sync-dot" id="syncDot" title="Statut synchronisation"></div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
@@ -258,7 +259,14 @@
       <button class="btn-close" id="closeConfig">✕</button>
     </div>
 
-    <div class="config-section">📊 Stats globales (toutes caisses)</div>
+    <div class="config-section">🎪 Événement en cours</div>
+    <div class="config-item">
+      <input class="config-name-input" id="eventInput" type="text" maxlength="40" placeholder="Nom de l'événement">
+      <button class="btn-secondary" id="btnSaveEvent" style="font-size:13px; padding:9px 14px; flex-shrink:0;">Valider</button>
+    </div>
+    <div style="font-size:12px; color:var(--muted); margin: 2px 2px 8px;">Changer de nom crée de nouveaux onglets dans le Sheet. Les ventes des événements précédents restent dans leurs onglets.</div>
+
+    <div class="config-section">📊 Stats de l'événement (toutes caisses)</div>
     <div class="session-stats" id="sessionStats"><div style="text-align:center;color:var(--muted);font-size:13px;padding:8px;">Chargement…</div></div>
     <div style="display:flex; gap:8px; justify-content:center; margin: 8px 0 4px;">
       <button class="btn-secondary" id="btnRefreshStats" style="font-size:12px; padding:8px 14px;">↻ Rafraîchir</button>
@@ -280,6 +288,7 @@
     <div class="pay-total" id="payTotal"></div>
     <div class="pay-methods">
       <div class="pay-method" data-method="tickets"><span class="pay-method-icon">🎟️</span>Tickets</div>
+      <div class="pay-method" data-method="cash"><span class="pay-method-icon">💶</span>Espèces</div>
       <div class="pay-method" data-method="card"><span class="pay-method-icon">💳</span>Carte</div>
     </div>
     <button class="btn-confirm" id="btnConfirm">✓ VALIDER</button>
@@ -453,7 +462,14 @@ function renderCart() {
 
 function renderConfig() {
   const cats=[{key:'biere',label:'Bières'},{key:'vin',label:'Vins'},{key:'soft',label:'Softs'},{key:'cons',label:'Consigne'}];
-  document.getElementById('configItems').innerHTML=cats.map(c=>{
+  const payHtml = '<div class="config-section">Modes de paiement</div>' + PAY_METHODS.map(m=>{
+    const off = hiddenIds.has('pay_'+m.k);
+    return `<div class="config-item${off?' is-hidden':''}">
+      <button class="config-vis" data-id="pay_${m.k}" title="${off?'Masqué — cliquer pour afficher':'Visible — cliquer pour masquer'}">${off?'🚫':'👁'}</button>
+      <span class="config-name">${m.icon} ${m.label}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('configItems').innerHTML=payHtml+cats.map(c=>{
     const items=products.filter(p=>p.cat===c.key);
     return `<div class="config-section">${c.label}</div>`+items.map(p=>{
       const idx=products.indexOf(p);
@@ -484,6 +500,54 @@ function renderConfig() {
   document.querySelectorAll('#configItems .config-vis').forEach(btn=>{
     btn.addEventListener('click',()=>toggleVisibility(btn.dataset.id));
   });
+}
+
+const PAY_METHODS = [
+  { k:'tickets', label:'Tickets', icon:'🎟️' },
+  { k:'cash',    label:'Espèces', icon:'💶' },
+  { k:'card',    label:'Carte',   icon:'💳' },
+];
+function applyPayVisibility() {
+  document.querySelectorAll('.pay-method').forEach(m=>{
+    m.classList.toggle('is-off', hiddenIds.has('pay_'+m.dataset.method));
+  });
+}
+
+/* Événement en cours — partagé via la Sheet, affiché dans l'en-tête. */
+let currentEvent = (()=>{ try { return localStorage.getItem('lj_event') || ''; } catch { return ''; } })();
+function showEvent() {
+  document.getElementById('eventName').textContent = currentEvent ? currentEvent.toUpperCase() : '';
+  const inp = document.getElementById('eventInput');
+  if(inp && document.activeElement !== inp) inp.value = currentEvent;
+}
+async function fetchEvent() {
+  try {
+    const r = await fetchWithTimeout(SHEETS_WEBHOOK_URL + '?action=event&_=' + Date.now(), 12000);
+    const d = await r.json();
+    if(d && d.event) {
+      currentEvent = d.event;
+      try { localStorage.setItem('lj_event', currentEvent); } catch {}
+      showEvent();
+    }
+  } catch(e) { /* garde le cache */ }
+}
+async function saveEvent() {
+  const name = document.getElementById('eventInput').value.trim();
+  if(!name || name === currentEvent) return;
+  if(!confirm('Passer à l\'événement « ' + name + ' » ?\n\nLes prochaines ventes iront dans de nouveaux onglets du Sheet. Les stats repartent de zéro pour cet événement.')) return;
+  try {
+    const url = SHEETS_WEBHOOK_URL + '?action=setevent&key=' + encodeURIComponent(ADMIN_PIN)
+      + '&name=' + encodeURIComponent(name) + '&_=' + Date.now();
+    const r = await fetchWithTimeout(url, 15000);
+    const d = await r.json();
+    if(d && d.ok) {
+      currentEvent = d.event;
+      try { localStorage.setItem('lj_event', currentEvent); } catch {}
+      showEvent();
+      showToast('✓ Événement : ' + currentEvent, 'ok');
+      fetchGlobalStats();
+    } else { showToast('⚠ Échec : ' + ((d && d.error) || 'inconnu'), 'err'); }
+  } catch(e) { showToast('⚠ Erreur réseau', 'err'); }
 }
 
 /* Masquer/afficher un produit — propagé à tous les appareils via la Sheet. */
@@ -541,18 +605,21 @@ async function fetchGlobalStats() {
       } catch(err) { lastErr = err; }
     }
     if(!d) throw lastErr || new Error('pas de réponse');
-    const tot = (d.tickets||0) + (d.card||0);
-    const totCount = (d.countTickets||0) + (d.countCard||0);
+    const M = [
+      { k:'tickets', label:'🎟️ Tickets', amt:d.tickets||0, n:d.countTickets||0 },
+      { k:'cash',    label:'💶 Espèces', amt:d.cash||0,    n:d.countCash||0 },
+      { k:'card',    label:'💳 Carte',   amt:d.card||0,    n:d.countCard||0 },
+    ];
+    const tot = M.reduce((s,m)=>s+m.amt,0);
+    const totCount = M.reduce((s,m)=>s+m.n,0);
     const pct = (v)=> tot>0 ? Math.round(v/tot*100) : 0;
-    el.innerHTML = `
+    // on n'affiche que les modes actifs, ou ceux qui ont déjà des ventes
+    const rowsHtml = M.filter(m=>!hiddenIds.has('pay_'+m.k) || m.n>0).map(m=>`
       <div class="stat-row">
-        <span class="stat-label">🎟️ Tickets <small style="color:var(--muted);font-weight:600;">(${d.countTickets||0} encaiss.)</small></span>
-        <span class="stat-value">${fmt(d.tickets||0)} <small style="color:var(--text-dim);font-size:13px;">${pct(d.tickets||0)}%</small></span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">💳 Carte <small style="color:var(--muted);font-weight:600;">(${d.countCard||0} encaiss.)</small></span>
-        <span class="stat-value">${fmt(d.card||0)} <small style="color:var(--text-dim);font-size:13px;">${pct(d.card||0)}%</small></span>
-      </div>
+        <span class="stat-label">${m.label} <small style="color:var(--muted);font-weight:600;">(${m.n} encaiss.)</small></span>
+        <span class="stat-value">${fmt(m.amt)} <small style="color:var(--text-dim);font-size:13px;">${pct(m.amt)}%</small></span>
+      </div>`).join('');
+    el.innerHTML = rowsHtml + `
       <div class="stat-row">
         <span class="stat-label">📋 Total encaissements</span>
         <span class="stat-value">${totCount}</span>
@@ -722,9 +789,13 @@ window.addEventListener('online', retryQueue);
 setInterval(retryQueue, 30000);
 retryQueue();
 
-// visibilité produits (partagée) : au chargement + rafraîchie périodiquement
+// visibilité produits + événement (partagés) : au chargement + rafraîchis périodiquement
+showEvent();
+fetchEvent();
 fetchVisibility();
-setInterval(fetchVisibility, 60000);
+setInterval(()=>{ fetchVisibility(); fetchEvent(); }, 60000);
+document.getElementById('btnSaveEvent').addEventListener('click', saveEvent);
+document.getElementById('eventInput').addEventListener('keydown', e=>{ if(e.key==='Enter') saveEvent(); });
 
 document.getElementById('btnClear').addEventListener('click',clearCart);
 document.getElementById('btnRemove').addEventListener('click',removeLast);
@@ -733,6 +804,8 @@ document.getElementById('btnConfig').addEventListener('click',()=>{
   openPin(()=>{
     renderConfig();
     document.getElementById('configModal').classList.add('open');
+    showEvent();
+    fetchEvent();
     fetchGlobalStats();
     fetchVisibility().then(renderConfig);
   });
@@ -764,6 +837,10 @@ document.getElementById('btnPay').addEventListener('click',()=>{
   document.getElementById('payTotal').textContent=fmt(total());
   document.getElementById('btnConfirm').classList.remove('show');
   document.querySelectorAll('.pay-method').forEach(m=>m.classList.remove('selected'));
+  applyPayVisibility();
+  // un seul mode actif → présélectionné
+  const visible = [...document.querySelectorAll('.pay-method:not(.is-off)')];
+  if(visible.length===1) { visible[0].classList.add('selected'); document.getElementById('btnConfirm').classList.add('show'); }
   document.getElementById('payModal').classList.add('open');
 });
 document.querySelectorAll('.pay-method').forEach(m=>m.addEventListener('click',()=>{

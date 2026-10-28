@@ -1,30 +1,25 @@
 /************************************************************
- *  CAISSE BAR — LA JAVA · Webhook Google Apps Script
- *  À coller dans le classeur "budget_bar_lajava" :
+ *  CAISSE BAR — Webhook Google Apps Script (générique, multi-événements)
+ *  À coller dans le classeur de suivi :
  *    Extensions → Apps Script → coller ce code → Enregistrer
- *
- *  Puis lancer UNE FOIS la fonction  initTabs()  (menu ▶) pour
- *  créer les onglets et autoriser le script.
  *
  *  Déploiement :
  *    Déployer → Gérer les déploiements → ✏️ → Nouvelle version → Déployer
- *    (garde la même URL /exec ; nécessaire pour que doPost utilise ce code)
+ *    (garde la même URL /exec)
  *
- *  L'app POST chaque encaissement ; le script :
- *    - journalise le ticket dans l'onglet "App_Tickets"
- *    - journalise chaque article dans "App_Ventes" (avec volume L)
- *    - recalcule l'onglet "App_Live" : litres + fûts entamés / bière
+ *  Chaque ENCAISSEMENT est rangé dans des onglets PROPRES À L'ÉVÉNEMENT
+ *  en cours (ex. "Tickets · Java Club"). Changer d'événement depuis
+ *  l'admin de l'app crée automatiquement de nouveaux onglets, sans
+ *  toucher à ceux des événements précédents.
  *
- *  NB : App_Live est rempli avec des VALEURS (pas des formules) pour
- *  éviter tout souci de séparateur , / ; selon la locale du classeur.
+ *  Par événement, 3 onglets :
+ *    - "Tickets · <event>"  : 1 ligne / encaissement
+ *    - "Ventes · <event>"   : 1 ligne / article (avec volume L)
+ *    - "Live · <event>"      : agrégat recalculé (litres + fûts entamés)
  ************************************************************/
 
-const TAB_TICKETS = 'App_Tickets';
-const TAB_VENTES  = 'App_Ventes';
-const TAB_LIVE    = 'App_Live';
-
-// Clé exigée pour la réinitialisation (= PIN admin de l'app).
-const RESET_KEY = '3216';
+const RESET_KEY = '3216';           // = PIN admin de l'app
+const DEFAULT_EVENT = 'La Java';    // événement par défaut au premier lancement
 
 // Volume d'un fût par bière (L). Le nom doit matcher ce qu'envoie l'app.
 const FUTS = [
@@ -34,7 +29,55 @@ const FUTS = [
   { nom: 'IPA Holl',             volFut: 20 },
 ];
 
-// Volume d'une portion (L) selon le sous-titre du produit.
+const HEAD_TICKETS = ['Horodatage', 'Méthode', 'Montant (€)', 'Device', 'Vendeur'];
+const HEAD_VENTES  = ['Horodatage', 'Méthode', 'Produit', 'Format', 'Qté', 'PU (€)', 'Montant (€)', 'Volume (L)', 'Device', 'Vendeur'];
+
+function props() { return PropertiesService.getScriptProperties(); }
+function ss() { return SpreadsheetApp.getActiveSpreadsheet(); }
+
+/* ---- Événement courant (partagé entre tous les appareils) ---- */
+function getEvent() { return props().getProperty('event') || DEFAULT_EVENT; }
+function setEvent(name) {
+  const n = String(name || '').trim() || DEFAULT_EVENT;
+  props().setProperty('event', n);
+  return n;
+}
+
+/* ---- Produits masqués (global, tous événements) ---- */
+function getHidden() {
+  const raw = props().getProperty('hidden') || '[]';
+  try { const a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+}
+function setHidden(ids) { props().setProperty('hidden', JSON.stringify(ids || [])); }
+
+/* ---- Onglets par événement ---- */
+function safeName(s) { return String(s).replace(/[:\\\/\?\*\[\]]/g, ' ').trim().slice(0, 60); }
+function tabName(base, ev) { return (base + ' · ' + safeName(ev)).slice(0, 95); }
+
+function getOrCreateTab(name) {
+  const s = ss().getSheetByName(name);
+  return s ? s : ss().insertSheet(name);
+}
+function setHeader(sheet, head) {
+  sheet.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold');
+}
+
+function tabsFor(ev) {
+  const t = getOrCreateTab(tabName('Tickets', ev));
+  if (t.getLastRow() === 0) setHeader(t, HEAD_TICKETS);
+  const v = getOrCreateTab(tabName('Ventes', ev));
+  if (v.getLastRow() === 0) setHeader(v, HEAD_VENTES);
+  const l = getOrCreateTab(tabName('Live', ev));
+  return { t: t, v: v, l: l };
+}
+
+/** Prépare les onglets de l'événement courant + autorise le script. */
+function initTabs() {
+  const ev = getEvent();
+  tabsFor(ev);
+  rebuildLive(ev);
+}
+
 function volumePortion(sub) {
   if (!sub) return 0;
   const s = String(sub).toLowerCase();
@@ -44,46 +87,22 @@ function volumePortion(sub) {
   if (s.indexOf('50')    !== -1) return 0.50;
   return 0;
 }
+function round2(n) { return Math.round(n * 100) / 100; }
 
-function ss() { return SpreadsheetApp.getActiveSpreadsheet(); }
-
-function getOrCreateTab(name) {
-  const s = ss().getSheetByName(name);
-  return s ? s : ss().insertSheet(name);
-}
-
-/** À lancer une fois à la main pour préparer les onglets. */
-const HEAD_TICKETS = ['Horodatage', 'Méthode', 'Montant (€)', 'Device', 'Vendeur'];
-const HEAD_VENTES  = ['Horodatage', 'Méthode', 'Produit', 'Format', 'Qté', 'PU (€)', 'Montant (€)', 'Volume (L)', 'Device', 'Vendeur'];
-
-function setHeader(sheet, head) {
-  sheet.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold');
-}
-
-function initTabs() {
-  const t = getOrCreateTab(TAB_TICKETS);
-  setHeader(t, HEAD_TICKETS);
-  const v = getOrCreateTab(TAB_VENTES);
-  setHeader(v, HEAD_VENTES);
-  getOrCreateTab(TAB_LIVE);
-  rebuildLive();
-}
-
-/** Recalcule l'onglet App_Live à partir de App_Ventes (valeurs, pas formules). */
-function rebuildLive() {
-  const v = ss().getSheetByName(TAB_VENTES);
-  // Init des agrégats par bière
+/** Recalcule l'onglet "Live · <event>" (valeurs, pas formules). */
+function rebuildLive(ev) {
+  ev = ev || getEvent();
+  const v = ss().getSheetByName(tabName('Ventes', ev));
   const agg = {};
   FUTS.forEach(function (f) { agg[f.nom] = { litres: 0, demis: 0, pintes: 0, volFut: f.volFut }; });
 
   if (v && v.getLastRow() > 1) {
-    // Colonnes : C=Produit(3), D=Format(4), E=Qté(5), H=Volume(8)
     const data = v.getRange(2, 3, v.getLastRow() - 1, 6).getValues(); // C..H
     data.forEach(function (r) {
-      const produit = String(r[0]).trim();       // C
-      const format  = String(r[1]).toLowerCase(); // D
-      const qty     = Number(r[2]) || 0;          // E
-      const vol     = Number(r[5]) || 0;          // H
+      const produit = String(r[0]).trim();
+      const format  = String(r[1]).toLowerCase();
+      const qty     = Number(r[2]) || 0;
+      const vol     = Number(r[5]) || 0;
       if (agg[produit]) {
         agg[produit].litres += vol;
         if (format.indexOf('demi') !== -1)  agg[produit].demis  += qty;
@@ -92,7 +111,7 @@ function rebuildLive() {
     });
   }
 
-  const l = getOrCreateTab(TAB_LIVE);
+  const l = getOrCreateTab(tabName('Live', ev));
   l.clearContents();
   const rows = [['Bière', 'Litres vendus', 'Vol/fût (L)', 'Fûts entamés', 'Nb demis', 'Nb pintes']];
   let totL = 0, totFuts = 0;
@@ -108,91 +127,87 @@ function rebuildLive() {
   l.getRange(rows.length, 1, 1, 6).setFontWeight('bold');
 }
 
-function round2(n) { return Math.round(n * 100) / 100; }
-
-/** Vide les ventes/tickets (garde les en-têtes) et remet App_Live à zéro. */
+/** Vide tickets/ventes de l'événement courant (garde les en-têtes) + Live à zéro. */
 function resetData() {
-  [TAB_TICKETS, TAB_VENTES].forEach(function (name) {
+  const ev = getEvent();
+  [tabName('Tickets', ev), tabName('Ventes', ev)].forEach(function (name) {
     const s = ss().getSheetByName(name);
     if (s && s.getLastRow() > 1) {
       s.getRange(2, 1, s.getLastRow() - 1, s.getLastColumn()).clearContent();
     }
   });
-  rebuildLive();
+  rebuildLive(ev);
 }
 
-/** Reçoit un encaissement depuis l'app. */
+/** Reçoit un encaissement depuis l'app → rangé dans l'événement courant. */
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
     const ts = data.ts ? new Date(data.ts) : new Date();
-
     const vendor = data.vendor || '';
+    const ev = getEvent();
+    const tabs = tabsFor(ev);
 
-    const tTickets = getOrCreateTab(TAB_TICKETS);
-    if (tTickets.getLastRow() === 0) initTabs();
-    tTickets.appendRow([ts, data.method || '', Number(data.amount) || 0, data.deviceId || '', vendor]);
+    tabs.t.appendRow([ts, data.method || '', Number(data.amount) || 0, data.deviceId || '', vendor]);
 
-    const tVentes = getOrCreateTab(TAB_VENTES);
     (data.items || []).forEach(function (it) {
       const qty = Number(it.qty) || 0;
       const pu = Number(it.price) || 0;
       const vol = volumePortion(it.sub) * qty;
-      tVentes.appendRow([ts, data.method || '', it.name || '', it.sub || '', qty, pu, pu * qty, vol, data.deviceId || '', vendor]);
+      tabs.v.appendRow([ts, data.method || '', it.name || '', it.sub || '', qty, pu, pu * qty, vol, data.deviceId || '', vendor]);
     });
 
-    rebuildLive();
-    return json({ ok: true });
+    rebuildLive(ev);
+    return json({ ok: true, event: ev });
   } catch (err) {
     return json({ ok: false, error: String(err) });
   }
 }
 
-/** Stats globales pour le panneau admin de l'app. */
-/* Liste des produits masqués, partagée entre tous les appareils (Script Properties). */
-function getHidden() {
-  const raw = PropertiesService.getScriptProperties().getProperty('hidden') || '[]';
-  try { const a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch (e) { return []; }
-}
-function setHidden(ids) {
-  PropertiesService.getScriptProperties().setProperty('hidden', JSON.stringify(ids || []));
-}
-
 function doGet(e) {
-  if (e && e.parameter && e.parameter.action === 'visibility') {
+  const p = (e && e.parameter) || {};
+
+  if (p.action === 'event') {
+    return json({ event: getEvent() });
+  }
+  if (p.action === 'setevent') {
+    if (String(p.key) !== RESET_KEY) return json({ ok: false, error: 'clé invalide' });
+    const n = setEvent(p.name);
+    tabsFor(n); rebuildLive(n);
+    return json({ ok: true, event: n });
+  }
+  if (p.action === 'visibility') {
     return json({ hidden: getHidden() });
   }
-  if (e && e.parameter && e.parameter.action === 'setvisibility') {
-    if (String(e.parameter.key) !== RESET_KEY) {
-      return json({ ok: false, error: 'clé invalide' });
-    }
-    const raw = String(e.parameter.hidden || '');
+  if (p.action === 'setvisibility') {
+    if (String(p.key) !== RESET_KEY) return json({ ok: false, error: 'clé invalide' });
+    const raw = String(p.hidden || '');
     const ids = raw ? raw.split(',').map(function (s) { return s.trim(); }).filter(String) : [];
     setHidden(ids);
     return json({ ok: true, hidden: ids });
   }
-  if (e && e.parameter && e.parameter.action === 'reset') {
-    if (String(e.parameter.key) !== RESET_KEY) {
-      return json({ ok: false, error: 'clé invalide' });
-    }
+  if (p.action === 'reset') {
+    if (String(p.key) !== RESET_KEY) return json({ ok: false, error: 'clé invalide' });
     resetData();
     return json({ ok: true });
   }
-  if (e && e.parameter && e.parameter.action === 'stats') {
-    const t = ss().getSheetByName(TAB_TICKETS);
-    let tickets = 0, card = 0, countTickets = 0, countCard = 0;
+  if (p.action === 'stats') {
+    const t = ss().getSheetByName(tabName('Tickets', getEvent()));
+    let tickets = 0, cash = 0, card = 0, countTickets = 0, countCash = 0, countCard = 0;
     if (t && t.getLastRow() > 1) {
       const rows = t.getRange(2, 2, t.getLastRow() - 1, 2).getValues(); // Méthode, Montant
       rows.forEach(function (r) {
         const m = String(r[0]).toLowerCase();
         const amt = Number(r[1]) || 0;
         if (m === 'tickets') { tickets += amt; countTickets++; }
+        else if (m === 'cash') { cash += amt; countCash++; }
         else if (m === 'card') { card += amt; countCard++; }
       });
     }
-    return json({ tickets: tickets, card: card, countTickets: countTickets, countCard: countCard });
+    return json({ tickets: tickets, cash: cash, card: card,
+                  countTickets: countTickets, countCash: countCash, countCard: countCard, event: getEvent() });
   }
-  return ContentService.createTextOutput('Caisse Bar La Java — webhook actif');
+  return ContentService.createTextOutput('Caisse Bar — webhook actif · événement : ' + getEvent());
 }
 
 function json(obj) {
